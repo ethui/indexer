@@ -1,0 +1,31 @@
+[package]
+name = "iron-indexer"
+edition = "2021"
+version = "0.0.1"
+license-file = "./LICENSE"
+homepage = "https://github.com/iron-wallet"
+repository = "https://github.com/iron-wallet/indexer"
+exclude = [".github/"]
+authors = ["Miguel Palhas <mpalhas@gmail.com>"]
+
+[dependencies]
+tokio = { version = "1.33", features = ["full", "sync"] }
+clap = { version = "4.4.8", features = ["derive", "env"] }
+serde = { version = "1.0", features = ["derive", "std"] }
+color-eyre = "0.6.2"
+alloy-primitives = { version = "0.5.0", features = ["serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+futures = "0.3.28"
+toml = "0.8.8"
+actix = "0.13.1"
+actix-web = "4"
+actix-cors = "0.6.4"
+reth-db = { git = "https://github.com/paradigmxyz/reth", package = "reth-db" }
+reth-primitives = { git = "https://github.com/paradigmxyz/reth", package = "reth-primitives", features = [
+  "optimism",
+] }
+reth_provider = { git = "https://github.com/paradigmxyz/reth", package = "reth-provider" }
+reth-rpc-types = { git = "https://github.com/paradigmxyz/reth" }
+diesel = "2.1.0"
+diesel-async = { version = "0.3.1", features = ["postgres"] }
