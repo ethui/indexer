@@ -18,6 +18,8 @@ pub struct Config {
 
     #[serde(default)]
     pub http: HttpConfig,
+
+    pub db: DbConfig,
 }
 
 #[derive(Deserialize, Debug)]
@@ -34,10 +36,15 @@ pub struct SyncConfig {
     pub seed_addresses: BTreeSet<Address>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct HttpConfig {
     #[serde(default = "default_http_port")]
     pub port: u16,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct DbConfig {
+    pub url: String,
 }
 
 impl Config {

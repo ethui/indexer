@@ -1,16 +1,26 @@
-use alloy_primitives::Address;
-use diesel::prelude::*;
+use color_eyre::Result;
+use diesel_async::{AsyncConnection, AsyncPgConnection};
+use tokio::spawn;
+use tokio::task::JoinHandle;
 
-table! {
-    accounts {
-        id -> Integer,
-        address -> String,
-        chain_id -> Integer,
-    }
+use crate::config::DbConfig;
+
+pub struct Db {
+    connection: AsyncPgConnection,
 }
 
-#[derive(Queryable, Selectable, Debug)]
-struct Accounts {
-    id: i32,
-    address: Address,
+impl Db {
+    pub async fn start(config: &DbConfig) -> Result<JoinHandle<Result<()>>> {
+        let connection = AsyncPgConnection::establish(&config.url).await?;
+        let db = Self { connection };
+
+        let handle = spawn(async move { db.run().await });
+
+        Ok(handle)
+    }
+
+    #[tracing::instrument(name = "db", skip(self))]
+    async fn run(self) -> Result<()> {
+        Ok(())
+    }
 }

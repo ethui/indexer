@@ -29,3 +29,4 @@ reth_provider = { git = "https://github.com/paradigmxyz/reth", package = "reth-p
 reth-rpc-types = { git = "https://github.com/paradigmxyz/reth" }
 diesel = "2.1.0"
 diesel-async = { version = "0.3.1", features = ["postgres"] }
+tracing-actix-web = "0.7.9"

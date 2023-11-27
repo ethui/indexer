@@ -8,10 +8,11 @@ use reth_db::{
 };
 use reth_primitives::Header;
 use reth_provider::{
-    BlockNumReader, BlockReader, DatabaseProvider, HeaderProvider, ProviderFactory, TransactionsProvider,
+    BlockNumReader, BlockReader, DatabaseProvider, HeaderProvider, ProviderFactory,
+    TransactionsProvider,
 };
 use tokio::{task::JoinHandle, time::sleep};
-use tracing::{info, trace};
+use tracing::{debug, info, trace};
 
 use crate::config::Config;
 
@@ -26,12 +27,12 @@ pub struct Sync {
 }
 
 impl Sync {
-    #[tracing::instrument(skip(config))]
     pub fn start(config: &Config) -> Result<JoinHandle<Result<()>>> {
         let sync: Self = config.try_into()?;
         Ok(tokio::spawn(async move { sync.run().await }))
     }
 
+    #[tracing::instrument(name = "sync", skip(self))]
     pub async fn run(mut self) -> Result<()> {
         let mut next_block = self.from_block;
 
@@ -95,7 +96,7 @@ impl Sync {
             // check tx origin
             if let Some(from) = tx.recover_signer() {
                 if self.addresses.contains(&from) {
-                    info!("found tx {} for address {}", tx.hash(), from);
+                    debug!("found tx {} for address {}", tx.hash(), from);
                 }
             }
 
