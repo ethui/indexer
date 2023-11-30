@@ -7,7 +7,6 @@ notice = "warn"
 [licenses]
 allow = [
   "MIT",
-  "MIT-0",
   "Unlicense",
   "ISC",
   "Unicode-DFS-2016",
@@ -16,7 +15,6 @@ allow = [
   "MPL-2.0",
   "BSD-2-Clause",
   "BSD-3-Clause",
-  "OpenSSL",
   "CC0-1.0",
 ]
 exceptions = [
