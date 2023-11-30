@@ -41,3 +41,6 @@ reth-rpc-types = { git = "https://github.com/paradigmxyz/reth", tag = "v0.1.0-al
 alloy-primitives = { version = "0.5.0", features = ["serde"] }
 thiserror = "1.0.50"
 bigdecimal = "0.4.2"
+fastbloom-rs = "0.5.8"
+scalable_cuckoo_filter = "0.2.3"
+rand = "0.8.5"

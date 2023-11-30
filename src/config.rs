@@ -11,7 +11,7 @@ struct Args {
     config: PathBuf,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct Config {
     pub reth: RethConfig,
     pub sync: SyncConfig,
@@ -22,7 +22,7 @@ pub struct Config {
     pub db: DbConfig,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct RethConfig {
     pub db: PathBuf,
     pub chain_id: u64,
@@ -31,7 +31,7 @@ pub struct RethConfig {
     pub start_block: u64,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct SyncConfig {
     pub seed_addresses: BTreeSet<Address>,
 
@@ -45,7 +45,7 @@ pub struct HttpConfig {
     pub port: u16,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct DbConfig {
     pub url: String,
 }

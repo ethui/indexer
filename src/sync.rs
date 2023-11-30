@@ -3,6 +3,8 @@ use std::{collections::BTreeSet, time::Duration};
 
 use alloy_primitives::{Address, FixedBytes, B256};
 use color_eyre::eyre::Result;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 use reth_db::{
     mdbx::{tx::Tx, RO},
     DatabaseEnv,
@@ -12,12 +14,12 @@ use reth_provider::{
     BlockNumReader, BlockReader, DatabaseProvider, HeaderProvider, ProviderFactory,
     ReceiptProvider, TransactionsProvider,
 };
+use scalable_cuckoo_filter::{DefaultHasher, ScalableCuckooFilter, ScalableCuckooFilterBuilder};
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::{instrument, trace};
 
 use crate::config::Config;
-use crate::db::models::CreateTx;
-use crate::db::Db;
+use crate::db::{models::CreateTx, Db};
 
 #[derive(Debug)]
 pub struct Match {
@@ -30,6 +32,7 @@ pub struct Sync {
     db: Db,
     chain_id: u64,
     addresses: BTreeSet<Address>,
+    cuckoo: ScalableCuckooFilter<Address, DefaultHasher, StdRng>,
     factory: ProviderFactory<DatabaseEnv>,
     provider: DatabaseProvider<Tx<RO>>,
     buffer: Vec<Match>,
@@ -47,10 +50,20 @@ impl Sync {
         let factory: ProviderFactory<reth_db::DatabaseEnv> = (&config.reth).try_into()?;
         let provider: reth_provider::DatabaseProvider<Tx<RO>> = factory.provider()?;
 
+        let mut cuckoo = ScalableCuckooFilterBuilder::new()
+            .initial_capacity(1000)
+            .rng(StdRng::from_entropy())
+            .finish();
+
+        config.sync.seed_addresses.iter().for_each(|addr| {
+            cuckoo.insert(addr);
+        });
+
         Ok(Self {
             db,
             chain_id: config.reth.chain_id,
             addresses: config.sync.seed_addresses.clone(),
+            cuckoo,
             factory,
             provider,
             buffer: Vec::with_capacity(config.sync.buffer_size),
@@ -151,6 +164,7 @@ impl Sync {
 
             addresses
                 .into_iter()
+                .filter(|addr| self.cuckoo.contains(addr))
                 .filter(|addr| self.addresses.contains(addr))
                 .for_each(|address| {
                     self.buffer.push(Match {
