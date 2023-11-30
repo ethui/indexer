@@ -1,7 +1,7 @@
 use std::collections::HashSet;
-use std::{collections::BTreeSet, path::PathBuf, time::Duration};
+use std::{collections::BTreeSet, time::Duration};
 
-use alloy_primitives::{Address, FixedBytes};
+use alloy_primitives::{Address, FixedBytes, B256};
 use color_eyre::eyre::Result;
 use reth_db::{
     mdbx::{tx::Tx, RO},
@@ -13,67 +13,96 @@ use reth_provider::{
     ReceiptProvider, TransactionsProvider,
 };
 use tokio::{task::JoinHandle, time::sleep};
-use tracing::{debug, info, trace};
+use tracing::{instrument, trace};
 
 use crate::config::Config;
+use crate::db::models::CreateTx;
 use crate::db::Db;
+
+#[derive(Debug)]
+pub struct Match {
+    pub address: Address,
+    pub block_number: u64,
+    pub hash: B256,
+}
 
 pub struct Sync {
     db: Db,
-    reth_db: PathBuf,
     chain_id: u64,
-    from_block: u64,
-    to_block: Option<u64>,
     addresses: BTreeSet<Address>,
     factory: ProviderFactory<DatabaseEnv>,
     provider: DatabaseProvider<Tx<RO>>,
+    buffer: Vec<Match>,
+    buffer_capacity: usize,
+    next_block: u64,
 }
 
 impl Sync {
-    pub async fn start(config: &Config) -> Result<JoinHandle<Result<()>>> {
-        let sync: Self = Self::new(config).await?;
+    pub async fn start(db: Db, config: &Config) -> Result<JoinHandle<Result<()>>> {
+        let sync: Self = Self::new(db, config).await?;
         Ok(tokio::spawn(async move { sync.run().await }))
     }
 
-    async fn new(config: &Config) -> Result<Self> {
-        let db = Db::connect(&config.db).await?;
+    async fn new(db: Db, config: &Config) -> Result<Self> {
         let factory: ProviderFactory<reth_db::DatabaseEnv> = (&config.reth).try_into()?;
         let provider: reth_provider::DatabaseProvider<Tx<RO>> = factory.provider()?;
 
         Ok(Self {
             db,
-            reth_db: config.reth.db.clone(),
             chain_id: config.reth.chain_id,
-            from_block: config.reth.start_block,
-            to_block: None,
             addresses: config.sync.seed_addresses.clone(),
             factory,
             provider,
+            buffer: Vec::with_capacity(config.sync.buffer_size),
+            buffer_capacity: config.sync.buffer_size,
+            next_block: config.reth.start_block,
         })
     }
 
-    #[tracing::instrument(name = "sync", skip(self))]
+    #[instrument(skip(self))]
     pub async fn run(mut self) -> Result<()> {
-        let mut next_block = self.from_block;
-
         loop {
-            match self.provider.header_by_number(next_block)? {
-                None => {
-                    if self.to_block.is_none() {
-                        // if the db changes we need a new read tx otherwise it will see the old
-                        // version
-                        self.wait_new_block(next_block).await?;
-                    } else {
-                        // finished
-                        break;
-                    }
-                }
+            match self.provider.header_by_number(self.next_block)? {
+                // got a block. process it, only flush if needed
                 Some(header) => {
                     self.process_block(&header).await?;
-                    next_block += 1;
+                    self.next_block += 1;
+                    self.maybe_flush().await?;
+                }
+
+                // no block found. take the wait chance to flush, and wait for new block
+                None => {
+                    self.flush().await?;
+                    self.wait_new_block(self.next_block).await?;
                 }
             }
         }
+    }
+
+    pub async fn maybe_flush(&mut self) -> Result<()> {
+        if self.buffer.len() >= self.buffer_capacity {
+            self.flush().await?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn flush(&mut self) -> Result<()> {
+        if self.buffer.is_empty() {
+            return Ok(());
+        }
+
+        let txs: Vec<_> = self
+            .buffer
+            .drain(..)
+            .map(|m| CreateTx {
+                address: m.address.into(),
+                chain_id: self.chain_id as i32,
+                hash: m.hash.into(),
+                block_number: m.block_number as i32,
+            })
+            .collect();
+        self.db.create_txs(txs).await?;
 
         Ok(())
     }
@@ -81,8 +110,6 @@ impl Sync {
     async fn wait_new_block(&mut self, block: u64) -> Result<()> {
         trace!(event = "wait", block);
         loop {
-            sleep(Duration::from_secs(2)).await;
-
             let provider = self.factory.provider()?;
             let latest = provider.last_block_number().unwrap();
 
@@ -91,12 +118,12 @@ impl Sync {
                 self.provider = provider;
                 return Ok(());
             }
+
+            sleep(Duration::from_secs(2)).await;
         }
     }
 
-    async fn process_block(&self, header: &Header) -> Result<()> {
-        // info!(event = "process", block = header.number);
-
+    async fn process_block(&mut self, header: &Header) -> Result<()> {
         let indices = match self.provider.block_body_indices(header.number)? {
             Some(indices) => indices,
             None => return Ok(()),
@@ -108,26 +135,12 @@ impl Sync {
                 None => continue,
             };
 
-            // check tx origin
-            if let Some(from) = tx.recover_signer() {
-                if self.addresses.contains(&from) {
-                    debug!("found tx {} for address {}", tx.hash(), from);
-                }
-            }
-
-            // check tx destination
-            if let Some(to) = tx.to() {
-                if self.addresses.contains(&to) {
-                    debug!("found tx {} for address {}", tx.hash(), to);
-                }
-            }
-
             let receipt = match self.provider.receipt(tx_id)? {
                 Some(receipt) => receipt,
                 None => continue,
             };
 
-            let mut addresses: HashSet<Address> = receipt
+            let mut addresses: HashSet<_> = receipt
                 .logs
                 .into_iter()
                 .flat_map(|log| log.topics.into_iter().filter_map(topic_as_address))
@@ -136,14 +149,16 @@ impl Sync {
             tx.recover_signer().map(|a| addresses.insert(a));
             tx.to().map(|a| addresses.insert(a));
 
-            let matches: HashSet<Address> = addresses
+            addresses
                 .into_iter()
                 .filter(|addr| self.addresses.contains(addr))
-                .collect();
-
-            if matches.len() > 1 {
-                dbg!(matches);
-            }
+                .for_each(|address| {
+                    self.buffer.push(Match {
+                        address,
+                        block_number: header.number,
+                        hash: tx.hash(),
+                    })
+                });
         }
 
         Ok(())

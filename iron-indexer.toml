@@ -8,6 +8,7 @@ seed_addresses = [
   "0x283509365B4Ec00590A2a84f13Fe9FFC9bBEEfbF",
   "0xC2dA150EcfaA2e275577203bB177DD4De4A2536e",
 ]
+buffer_size = 1000
 
 [db]
 url = "postgres://iron_indexer:iron-indexer&12345@localhost/iron_indexer"

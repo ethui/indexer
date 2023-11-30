@@ -14,8 +14,9 @@ async fn main() -> Result<()> {
     setup()?;
 
     let config = Config::read()?;
-    let sync = sync::Sync::start(&config).await?;
-    let api = api::Api::start(config);
+    let db = db::Db::connect(&config.db).await?;
+    let sync = sync::Sync::start(db.clone(), &config).await?;
+    let api = api::Api::start(db, config);
 
     // pin!(sync, db, api);
     let (sync, api) = futures::try_join!(sync, api)?;

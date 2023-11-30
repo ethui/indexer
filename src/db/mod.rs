@@ -8,6 +8,7 @@ use diesel_async::{
     pooled_connection::{deadpool::Pool, AsyncDieselConnectionManager},
     AsyncPgConnection, RunQueryDsl,
 };
+use tracing::instrument;
 
 use crate::config::DbConfig;
 
@@ -26,6 +27,7 @@ impl Db {
         Ok(Self { pool })
     }
 
+    #[instrument(skip(self))]
     pub async fn register(&self, register: Register) -> Result<()> {
         let mut conn = self.pool.get().await?;
 
@@ -37,14 +39,23 @@ impl Db {
         Ok(())
     }
 
-    pub async fn create_tx(&self, tx: CreateTx) -> Result<()> {
+    #[instrument(skip(self, txs), fields(txs = txs.len()))]
+    pub async fn create_txs(&self, txs: Vec<CreateTx>) -> Result<()> {
         let mut conn = self.pool.get().await?;
 
-        insert_into(txs::dsl::txs)
-            .values(&tx)
+        let res = insert_into(txs::dsl::txs)
+            .values(&txs)
+            .on_conflict_do_nothing()
             .execute(&mut conn)
-            .await?;
+            .await;
 
-        Ok(())
+        match res {
+            Ok(_) => Ok(()),
+            Err(diesel::result::Error::DatabaseError(
+                diesel::result::DatabaseErrorKind::ForeignKeyViolation,
+                _,
+            )) => Ok(()),
+            Err(e) => Err(e)?,
+        }
     }
 }

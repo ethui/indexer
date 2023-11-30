@@ -23,6 +23,24 @@ pub struct U256(pub alloy_primitives::U256);
 #[diesel(sql_type=Bytea)]
 pub struct B256(pub alloy_primitives::B256);
 
+impl From<alloy_primitives::Address> for Address {
+    fn from(value: alloy_primitives::Address) -> Self {
+        Self(value)
+    }
+}
+
+impl From<alloy_primitives::U256> for U256 {
+    fn from(value: alloy_primitives::U256) -> Self {
+        Self(value)
+    }
+}
+
+impl From<alloy_primitives::B256> for B256 {
+    fn from(value: alloy_primitives::B256) -> Self {
+        Self(value)
+    }
+}
+
 impl ToSql<Bytea, Pg> for Address {
     fn to_sql(&self, out: &mut Output<'_, '_, Pg>) -> serialize::Result {
         <Vec<u8> as ToSql<Bytea, Pg>>::to_sql(&self.0.to_vec(), &mut out.reborrow())

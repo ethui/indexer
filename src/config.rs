@@ -34,6 +34,9 @@ pub struct RethConfig {
 #[derive(Deserialize, Debug)]
 pub struct SyncConfig {
     pub seed_addresses: BTreeSet<Address>,
+
+    #[serde(default = "default_buffer_size")]
+    pub buffer_size: usize,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -71,4 +74,8 @@ fn default_from_block() -> u64 {
 
 fn default_http_port() -> u16 {
     9500
+}
+
+fn default_buffer_size() -> usize {
+    1000
 }
