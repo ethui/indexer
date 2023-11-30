@@ -1402,18 +1402,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "deadpool"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb84100978c1c7b37f09ed3ce3e5f843af02c2a2c431bae5b19230dad2c1b490"
-dependencies = [
- "async-trait",
- "deadpool-runtime",
- "num_cpus",
- "tokio",
-]
-
-[[package]]
 name = "deadpool-runtime"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1523,7 +1511,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7e7974099f0d9bde0e010dd3a673555276a474f3362a7a52ab535a57b7c5056"
 dependencies = [
  "async-trait",
- "deadpool 0.9.5",
+ "deadpool",
  "diesel",
  "futures-util",
  "scoped-futures",
@@ -2389,7 +2377,6 @@ dependencies = [
  "chrono",
  "clap",
  "color-eyre",
- "deadpool 0.10.0",
  "diesel",
  "diesel-async",
  "futures",
