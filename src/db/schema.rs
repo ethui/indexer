@@ -10,6 +10,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    chains (chain_id) {
+        chain_id -> Int4,
+        start_block -> Int4,
+        last_known_block -> Int4,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     txs (address, chain_id, hash) {
         address -> Bytea,
         chain_id -> Int4,
@@ -22,5 +31,6 @@ diesel::table! {
 
 diesel::allow_tables_to_appear_in_same_query!(
     accounts,
+    chains,
     txs,
 );
