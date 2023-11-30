@@ -1,0 +1,13 @@
+diff --git a/src/db/schema.rs b/src/db/schema.rs
+index c147275..8bb6b9d 100644
+--- a/src/db/schema.rs
++++ b/src/db/schema.rs
+@@ -4,7 +4,7 @@ diesel::table! {
+     accounts (id) {
+         id -> Int4,
+         address -> Bytea,
+-        chain_ids -> Array<Nullable<Int4>>,
++        chain_ids -> Array<Int4>,
+         created_at -> Timestamp,
+     }
+ }

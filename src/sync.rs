@@ -15,9 +15,11 @@ use tokio::{task::JoinHandle, time::sleep};
 use tracing::{debug, info, trace};
 
 use crate::config::Config;
+use crate::db::Db;
 
 pub struct Sync {
-    db: PathBuf,
+    db: Db,
+    reth_db: PathBuf,
     chain_id: u64,
     from_block: u64,
     to_block: Option<u64>,
@@ -27,9 +29,26 @@ pub struct Sync {
 }
 
 impl Sync {
-    pub fn start(config: &Config) -> Result<JoinHandle<Result<()>>> {
-        let sync: Self = config.try_into()?;
+    pub async fn start(config: &Config) -> Result<JoinHandle<Result<()>>> {
+        let sync: Self = Self::new(config).await?;
         Ok(tokio::spawn(async move { sync.run().await }))
+    }
+
+    async fn new(config: &Config) -> Result<Self> {
+        let db = Db::connect(&config.db).await?;
+        let factory: ProviderFactory<reth_db::DatabaseEnv> = (&config.reth).try_into()?;
+        let provider: reth_provider::DatabaseProvider<Tx<RO>> = factory.provider()?;
+
+        Ok(Self {
+            db,
+            reth_db: config.reth.db.clone(),
+            chain_id: config.reth.chain_id,
+            from_block: config.reth.start_block,
+            to_block: None,
+            addresses: config.sync.seed_addresses.clone(),
+            factory,
+            provider,
+        })
     }
 
     #[tracing::instrument(name = "sync", skip(self))]
@@ -116,24 +135,5 @@ impl Sync {
         }
 
         Ok(())
-    }
-}
-
-impl TryFrom<&Config> for Sync {
-    type Error = color_eyre::eyre::Error;
-
-    fn try_from(config: &Config) -> Result<Self, Self::Error> {
-        let factory: ProviderFactory<reth_db::DatabaseEnv> = (&config.reth).try_into()?;
-        let provider: reth_provider::DatabaseProvider<Tx<RO>> = factory.provider()?;
-
-        Ok(Self {
-            db: config.reth.db.clone(),
-            chain_id: config.reth.chain_id,
-            from_block: config.reth.start_block,
-            to_block: None,
-            addresses: config.sync.seed_addresses.clone(),
-            factory,
-            provider,
-        })
     }
 }
