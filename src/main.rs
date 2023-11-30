@@ -14,13 +14,11 @@ async fn main() -> Result<()> {
     setup()?;
 
     let config = Config::read()?;
-    let sync = sync::Sync::start(&config)?;
-    let db = db::Db::start(&config.db).await?;
-    let api = api::Api::start(config.http);
+    let sync = sync::Sync::start(&config).await?;
+    let api = api::Api::start(config);
 
     // pin!(sync, db, api);
-    let (db, sync, api) = futures::try_join!(db, sync, api)?;
-    db?;
+    let (sync, api) = futures::try_join!(sync, api)?;
     sync?;
     api?;
 
