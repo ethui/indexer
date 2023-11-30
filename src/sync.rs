@@ -1,6 +1,7 @@
+use std::collections::HashSet;
 use std::{collections::BTreeSet, path::PathBuf, time::Duration};
 
-use alloy_primitives::Address;
+use alloy_primitives::{Address, FixedBytes};
 use color_eyre::eyre::Result;
 use reth_db::{
     mdbx::{tx::Tx, RO},
@@ -9,7 +10,7 @@ use reth_db::{
 use reth_primitives::Header;
 use reth_provider::{
     BlockNumReader, BlockReader, DatabaseProvider, HeaderProvider, ProviderFactory,
-    TransactionsProvider,
+    ReceiptProvider, TransactionsProvider,
 };
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::{debug, info, trace};
@@ -107,11 +108,6 @@ impl Sync {
                 None => continue,
             };
 
-            // let receipt = match self.provider.receipt(tx_id)? {
-            //     Some(receipt) => receipt,
-            //     None => continue,
-            // };
-
             // check tx origin
             if let Some(from) = tx.recover_signer() {
                 if self.addresses.contains(&from) {
@@ -122,18 +118,45 @@ impl Sync {
             // check tx destination
             if let Some(to) = tx.to() {
                 if self.addresses.contains(&to) {
-                    info!("found tx {} for address {}", tx.hash(), to);
+                    debug!("found tx {} for address {}", tx.hash(), to);
                 }
             }
 
-            // dbg!(receipt.logs);
+            let receipt = match self.provider.receipt(tx_id)? {
+                Some(receipt) => receipt,
+                None => continue,
+            };
 
-            // let receipt = match self.provider.receipt(tx_id)? {
-            //     Some(receipt) => receipt,
-            //     None => continue,
-            // };
+            let mut addresses: HashSet<Address> = receipt
+                .logs
+                .into_iter()
+                .flat_map(|log| log.topics.into_iter().filter_map(topic_as_address))
+                .collect();
+
+            tx.recover_signer().map(|a| addresses.insert(a));
+            tx.to().map(|a| addresses.insert(a));
+
+            let matches: HashSet<Address> = addresses
+                .into_iter()
+                .filter(|addr| self.addresses.contains(addr))
+                .collect();
+
+            if matches.len() > 1 {
+                dbg!(matches);
+            }
         }
 
         Ok(())
+    }
+}
+
+fn topic_as_address(topic: FixedBytes<32>) -> Option<Address> {
+    let padding_slice = &topic.as_slice()[0..12];
+    let padding: FixedBytes<12> = FixedBytes::from_slice(padding_slice);
+
+    if padding.is_zero() {
+        Some(Address::from_slice(&topic[12..]))
+    } else {
+        None
     }
 }
