@@ -3,7 +3,7 @@ use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use super::schema::{accounts, txs};
-use super::types::{Address, B256, U256};
+use super::types::{Address, B256};
 
 #[derive(Queryable, Selectable, Serialize)]
 #[diesel(table_name = accounts, check_for_backend(Pg))]
@@ -17,8 +17,8 @@ pub struct Account {
 #[derive(Debug, Deserialize, Insertable)]
 #[diesel(table_name = accounts, check_for_backend(Pg))]
 pub struct Register {
-    address: Address,
-    chain_id: i32,
+    pub address: Address,
+    pub chain_id: i32,
 }
 
 #[derive(Queryable, Selectable, Serialize)]
