@@ -30,7 +30,7 @@ pub struct RethConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ChainConfig {
-    pub chain_id: u64,
+    pub chain_id: i32,
     #[serde(default = "default_from_block")]
     pub start_block: u64,
 }

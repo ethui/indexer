@@ -15,12 +15,14 @@ use reth_provider::{
     ReceiptProvider, TransactionsProvider,
 };
 use scalable_cuckoo_filter::{DefaultHasher, ScalableCuckooFilter, ScalableCuckooFilterBuilder};
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::{instrument, trace};
 
 use crate::config::Config;
 use crate::db::models::Chain;
 use crate::db::{models::CreateTx, Db};
+use crate::events::Event;
 use crate::provider::provider_factory;
 
 #[derive(Debug)]
@@ -40,15 +42,20 @@ pub struct Sync {
     buffer: Vec<Match>,
     buffer_capacity: usize,
     next_block: u64,
+    rcv: UnboundedReceiver<Event>,
 }
 
 impl Sync {
-    pub async fn start(db: Db, config: &Config) -> Result<JoinHandle<Result<()>>> {
-        let sync: Self = Self::new(db, config).await?;
+    pub async fn start(
+        db: Db,
+        config: &Config,
+        rcv: UnboundedReceiver<Event>,
+    ) -> Result<JoinHandle<Result<()>>> {
+        let sync: Self = Self::new(db, config, rcv).await?;
         Ok(tokio::spawn(async move { sync.run().await }))
     }
 
-    async fn new(db: Db, config: &Config) -> Result<Self> {
+    async fn new(db: Db, config: &Config, rcv: UnboundedReceiver<Event>) -> Result<Self> {
         let chain = db.setup_chain(&config.chain).await?;
 
         let factory = provider_factory(chain.chain_id as u64, &config.reth)?;
@@ -73,12 +80,15 @@ impl Sync {
             provider,
             buffer: Vec::with_capacity(config.sync.buffer_size),
             buffer_capacity: config.sync.buffer_size,
+            rcv,
         })
     }
 
     #[instrument(skip(self), fields(chain_id = self.chain.chain_id))]
     pub async fn run(mut self) -> Result<()> {
         loop {
+            self.process_events().await?;
+
             match self.provider.header_by_number(self.next_block)? {
                 // got a block. process it, only flush if needed
                 Some(header) => {
@@ -94,6 +104,33 @@ impl Sync {
                 }
             }
         }
+    }
+
+    pub async fn process_events(&mut self) -> Result<()> {
+        while let Ok(event) = self.rcv.try_recv() {
+            match event {
+                Event::AccountRegistered { address } => {
+                    self.addresses.insert(address);
+                    self.cuckoo.insert(&address);
+                    self.setup_backfill(address).await?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Create a new job for backfilling history for a new account
+    /// before the current sync point
+    async fn setup_backfill(&mut self, address: Address) -> Result<()> {
+        self.db
+            .create_backfill_job(
+                address.into(),
+                self.chain.chain_id,
+                (self.next_block - 1) as i32,
+                self.chain.start_block,
+            )
+            .await?;
+        Ok(())
     }
 
     /// if the buffer is sufficiently large, flush it to the database

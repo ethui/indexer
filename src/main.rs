@@ -1,10 +1,12 @@
 mod api;
 mod config;
 mod db;
+mod events;
 mod provider;
 mod sync;
 
 use color_eyre::eyre::Result;
+use tokio::sync::mpsc;
 use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter};
 
 use config::Config;
@@ -13,9 +15,10 @@ use config::Config;
 async fn main() -> Result<()> {
     setup()?;
 
+    let (tx, rx) = mpsc::unbounded_channel();
     let config = Config::read()?;
-    let db = db::Db::connect(&config.db).await?;
-    let sync = sync::Sync::start(db.clone(), &config).await?;
+    let db = db::Db::connect(&config, tx).await?;
+    let sync = sync::Sync::start(db.clone(), &config, rx).await?;
     let api = api::Api::start(db, config);
 
     // pin!(sync, db, api);

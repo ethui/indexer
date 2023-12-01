@@ -10,6 +10,18 @@ diesel::table! {
 }
 
 diesel::table! {
+    backfill_jobs (id) {
+        id -> Int4,
+        address -> Bytea,
+        chain_id -> Int4,
+        from_block -> Int4,
+        to_block -> Int4,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     chains (chain_id) {
         chain_id -> Int4,
         start_block -> Int4,
@@ -31,6 +43,7 @@ diesel::table! {
 
 diesel::allow_tables_to_appear_in_same_query!(
     accounts,
+    backfill_jobs,
     chains,
     txs,
 );
