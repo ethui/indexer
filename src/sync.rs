@@ -32,7 +32,23 @@ pub struct Match {
     pub hash: B256,
 }
 
-pub struct Sync {
+struct MainSync {
+    next_block: u64,
+    rcv: UnboundedReceiver<Event>,
+    sync: SyncData,
+}
+
+struct BackfillSync {
+    from: u64,
+    to: u64,
+    sync: SyncData,
+}
+
+trait SyncType: Send + 'static {}
+impl SyncType for MainSync {}
+impl SyncType for BackfillSync {}
+
+struct SyncData {
     db: Db,
     chain: Chain,
     addresses: BTreeSet<Address>,
@@ -45,16 +61,16 @@ pub struct Sync {
     rcv: UnboundedReceiver<Event>,
 }
 
-impl Sync {
-    pub async fn start(
-        db: Db,
-        config: &Config,
-        rcv: UnboundedReceiver<Event>,
-    ) -> Result<JoinHandle<Result<()>>> {
-        let sync: Self = Self::new(db, config, rcv).await?;
-        Ok(tokio::spawn(async move { sync.run().await }))
-    }
+pub async fn start_main(
+    db: Db,
+    config: &Config,
+    rcv: UnboundedReceiver<Event>,
+) -> Result<JoinHandle<Result<()>>> {
+    let sync = Sync::<MainSync>::new(db, config, rcv).await?;
+    Ok(tokio::spawn(async move { sync.run().await }))
+}
 
+impl MainSync {
     async fn new(db: Db, config: &Config, rcv: UnboundedReceiver<Event>) -> Result<Self> {
         let chain = db.setup_chain(&config.chain).await?;
 
@@ -71,6 +87,7 @@ impl Sync {
         });
 
         Ok(Self {
+            data: std::marker::PhantomData,
             db,
             next_block: chain.last_known_block as u64 + 1,
             chain,
@@ -83,7 +100,11 @@ impl Sync {
             rcv,
         })
     }
+}
 
+impl BackfillSync {}
+
+trait Sync {
     #[instrument(skip(self), fields(chain_id = self.chain.chain_id))]
     pub async fn run(mut self) -> Result<()> {
         loop {
