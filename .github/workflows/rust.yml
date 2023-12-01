@@ -53,6 +53,11 @@ jobs:
           command: clippy
           args: --all -- -D clippy::all -D clippy::dbg_macro
 
+      - name: cargo-test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+
   cargo-deny:
     runs-on: ubuntu-latest
     strategy:
