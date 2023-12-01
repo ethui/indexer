@@ -19,7 +19,9 @@ use tokio::{task::JoinHandle, time::sleep};
 use tracing::{instrument, trace};
 
 use crate::config::Config;
+use crate::db::models::Chain;
 use crate::db::{models::CreateTx, Db};
+use crate::provider::provider_factory;
 
 #[derive(Debug)]
 pub struct Match {
@@ -30,7 +32,7 @@ pub struct Match {
 
 pub struct Sync {
     db: Db,
-    chain_id: u64,
+    chain: Chain,
     addresses: BTreeSet<Address>,
     cuckoo: ScalableCuckooFilter<Address, DefaultHasher, StdRng>,
     factory: ProviderFactory<DatabaseEnv>,
@@ -47,7 +49,9 @@ impl Sync {
     }
 
     async fn new(db: Db, config: &Config) -> Result<Self> {
-        let factory: ProviderFactory<reth_db::DatabaseEnv> = (&config.reth).try_into()?;
+        let chain = db.setup_chain(&config.chain).await?;
+
+        let factory = provider_factory(chain.chain_id as u64, &config.reth)?;
         let provider: reth_provider::DatabaseProvider<Tx<RO>> = factory.provider()?;
 
         let mut cuckoo = ScalableCuckooFilterBuilder::new()
@@ -61,18 +65,18 @@ impl Sync {
 
         Ok(Self {
             db,
-            chain_id: config.reth.chain_id,
+            next_block: chain.last_known_block as u64 + 1,
+            chain,
             addresses: config.sync.seed_addresses.clone(),
             cuckoo,
             factory,
             provider,
             buffer: Vec::with_capacity(config.sync.buffer_size),
             buffer_capacity: config.sync.buffer_size,
-            next_block: config.reth.start_block,
         })
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self), fields(chain_id = self.chain.chain_id))]
     pub async fn run(mut self) -> Result<()> {
         loop {
             match self.provider.header_by_number(self.next_block)? {
@@ -92,6 +96,8 @@ impl Sync {
         }
     }
 
+    /// if the buffer is sufficiently large, flush it to the database
+    /// and update chain tip
     pub async fn maybe_flush(&mut self) -> Result<()> {
         if self.buffer.len() >= self.buffer_capacity {
             self.flush().await?;
@@ -100,22 +106,23 @@ impl Sync {
         Ok(())
     }
 
+    // empties the buffer and updates chain tip
     pub async fn flush(&mut self) -> Result<()> {
-        if self.buffer.is_empty() {
-            return Ok(());
-        }
-
         let txs: Vec<_> = self
             .buffer
             .drain(..)
             .map(|m| CreateTx {
                 address: m.address.into(),
-                chain_id: self.chain_id as i32,
+                chain_id: self.chain.chain_id,
                 hash: m.hash.into(),
                 block_number: m.block_number as i32,
             })
             .collect();
+
         self.db.create_txs(txs).await?;
+        self.db
+            .update_chain(self.chain.chain_id as u64, self.next_block - 1)
+            .await?;
 
         Ok(())
     }

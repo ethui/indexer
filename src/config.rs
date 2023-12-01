@@ -14,6 +14,7 @@ struct Args {
 #[derive(Deserialize, Clone, Debug)]
 pub struct Config {
     pub reth: RethConfig,
+    pub chain: ChainConfig,
     pub sync: SyncConfig,
 
     #[serde(default)]
@@ -25,8 +26,11 @@ pub struct Config {
 #[derive(Deserialize, Clone, Debug)]
 pub struct RethConfig {
     pub db: PathBuf,
-    pub chain_id: u64,
+}
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct ChainConfig {
+    pub chain_id: u64,
     #[serde(default = "default_from_block")]
     pub start_block: u64,
 }
