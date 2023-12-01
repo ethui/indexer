@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  cargo-clippy:
+  cargo-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
