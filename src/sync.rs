@@ -126,8 +126,8 @@ impl Sync {
             .create_backfill_job(
                 address.into(),
                 self.chain.chain_id,
-                (self.next_block - 1) as i32,
                 self.chain.start_block,
+                (self.next_block - 1) as i32,
             )
             .await?;
         Ok(())
