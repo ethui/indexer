@@ -1,5 +1,4 @@
 mod api;
-mod backfill;
 mod config;
 mod db;
 mod events;
