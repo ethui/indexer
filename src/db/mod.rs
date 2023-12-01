@@ -8,22 +8,32 @@ use diesel_async::{
     pooled_connection::{deadpool::Pool, AsyncDieselConnectionManager},
     AsyncPgConnection, RunQueryDsl,
 };
-use tracing::{instrument, trace};
+use tokio::sync::mpsc::UnboundedSender;
+use tracing::instrument;
 
-use crate::config::{ChainConfig, DbConfig};
+use crate::config::{ChainConfig, Config};
+use crate::events::Event;
 
-use self::models::{Chain, CreateTx, Register};
+use self::models::{Chain, CreateTx};
+use self::types::Address;
 
 #[derive(Clone)]
 pub struct Db {
     pool: Pool<AsyncPgConnection>,
+    tx: UnboundedSender<Event>,
+    chain_id: i32,
 }
 
 impl Db {
-    pub async fn connect(config: &DbConfig) -> Result<Self> {
-        let config = AsyncDieselConnectionManager::<AsyncPgConnection>::new(config.url.clone());
-        let pool = Pool::builder(config).build()?;
-        Ok(Self { pool })
+    pub async fn connect(config: &Config, tx: UnboundedSender<Event>) -> Result<Self> {
+        let db_config =
+            AsyncDieselConnectionManager::<AsyncPgConnection>::new(config.db.url.clone());
+        let pool = Pool::builder(db_config).build()?;
+        Ok(Self {
+            pool,
+            tx,
+            chain_id: config.chain.chain_id,
+        })
     }
 
     /// Seeds the database with a chain configuration
@@ -37,7 +47,7 @@ impl Db {
 
         let res = insert_into(chains)
             .values((
-                chain_id.eq(chain.chain_id as i32),
+                chain_id.eq(chain.chain_id),
                 start_block.eq(chain.start_block as i32),
                 last_known_block.eq(chain.start_block as i32 - 1),
             ))
@@ -48,7 +58,7 @@ impl Db {
         handle_error(res).await?;
 
         let res: Chain = schema::chains::table
-            .filter(chain_id.eq(chain.chain_id as i32))
+            .filter(chain_id.eq(chain.chain_id))
             .select(Chain::as_select())
             .first(&mut conn)
             .await?;
@@ -72,16 +82,23 @@ impl Db {
         handle_error(res).await
     }
 
+    /// Register a new account
     #[instrument(skip(self))]
-    pub async fn register(&self, register: Register) -> Result<()> {
-        use schema::accounts::dsl::*;
+    pub async fn register(&self, address: Address) -> Result<()> {
+        use schema::accounts::dsl;
 
         let mut conn = self.pool.get().await?;
 
-        let res = insert_into(accounts)
-            .values(&register)
+        let res = insert_into(dsl::accounts)
+            .values((dsl::address.eq(&address), dsl::chain_id.eq(self.chain_id)))
             .execute(&mut conn)
             .await;
+
+        // notify sync job if creation was successful
+        if res.is_ok() {
+            self.tx
+                .send(Event::AccountRegistered { address: address.0 })?;
+        }
 
         handle_error(res).await
     }
@@ -94,6 +111,32 @@ impl Db {
 
         let res = insert_into(txs)
             .values(&txs)
+            .on_conflict_do_nothing()
+            .execute(&mut conn)
+            .await;
+
+        handle_error(res).await
+    }
+
+    #[instrument(skip(self))]
+    pub async fn create_backfill_job(
+        &self,
+        address: Address,
+        chain_id: i32,
+        from_block: i32,
+        to_block: i32,
+    ) -> Result<()> {
+        use schema::backfill_jobs::dsl;
+
+        let mut conn = self.pool.get().await?;
+
+        let res = insert_into(dsl::backfill_jobs)
+            .values((
+                dsl::address.eq(address),
+                dsl::chain_id.eq(chain_id),
+                dsl::from_block.eq(from_block),
+                dsl::to_block.eq(to_block),
+            ))
             .on_conflict_do_nothing()
             .execute(&mut conn)
             .await;
