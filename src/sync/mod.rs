@@ -1,3 +1,6 @@
+mod backfill;
+mod main;
+
 use std::{
     collections::{BTreeSet, HashSet},
     time::Duration,
@@ -13,12 +16,12 @@ use reth_db::{
 };
 use reth_primitives::Header;
 use reth_provider::{
-    BlockNumReader, BlockReader, DatabaseProvider, HeaderProvider, ProviderFactory,
-    ReceiptProvider, TransactionsProvider,
+    BlockNumReader, BlockReader, DatabaseProvider, ProviderFactory, ReceiptProvider,
+    TransactionsProvider,
 };
 use scalable_cuckoo_filter::{DefaultHasher, ScalableCuckooFilter, ScalableCuckooFilterBuilder};
-use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle, time::sleep};
-use tracing::{instrument, trace};
+use tokio::time::sleep;
+use tracing::trace;
 
 use crate::{
     config::Config,
@@ -26,36 +29,14 @@ use crate::{
         models::{Chain, CreateTx},
         Db,
     },
-    events::Event,
     provider::provider_factory,
 };
 
-/// Main sync job
-/// Walks the blockchain forward, from a pre-configured starting block.
-/// Once it reaches the tip, waits continuously for new blocks to process
-///
-/// Receives events for newly registered addresses, at which point they are added to the search set
-/// and a backfill job is scheduled
-pub struct MainSync {
-    /// Sync job state
-    inner: SyncInner,
-
-    /// Receiver for account registration events
-    rcv: UnboundedReceiver<Event>,
-}
-
-/// Backfill job
-/// Walks the blockchain backwards, within a fixed range
-/// Processes a list of addresses determined by the rearrangment logic defined in
-/// `crate::db::rearrange_backfill`
-pub struct BackfillSync {
-    inner: SyncInner,
-    from: u64,
-    to: u64,
-}
+pub use backfill::BackfillSync;
+pub use main::MainSync;
 
 /// Generic sync job state
-struct SyncInner {
+pub(self) struct SyncInner {
     /// DB handle
     db: Db,
 
@@ -93,95 +74,8 @@ pub struct Match {
 }
 
 #[async_trait]
-trait SyncJob {
+pub(self) trait SyncJob {
     async fn run(mut self) -> Result<()>;
-}
-
-#[async_trait]
-impl SyncJob for MainSync {
-    #[instrument(skip(self), fields(chain_id = self.inner.chain.chain_id))]
-    async fn run(mut self) -> Result<()> {
-        loop {
-            self.process_events().await?;
-
-            match self
-                .inner
-                .provider
-                .header_by_number(self.inner.next_block)?
-            {
-                // got a block. process it, only flush if needed
-                Some(header) => {
-                    self.inner.process_block(&header).await?;
-                    self.inner.maybe_flush().await?;
-                    self.inner.next_block += 1;
-                }
-
-                // no block found. take the wait chance to flush, and wait for new block
-                None => {
-                    self.inner.flush().await?;
-                    self.inner.wait_new_block(self.inner.next_block).await?;
-                }
-            }
-        }
-    }
-}
-
-#[async_trait]
-impl SyncJob for BackfillSync {
-    #[instrument(skip(self), fields(chain_id = self.inner.chain.chain_id))]
-    async fn run(mut self) -> Result<()> {
-        for block in (self.from..=self.to).rev() {
-            self.inner.next_block = block;
-            let header = self.inner.provider.header_by_number(block)?.unwrap();
-            self.inner.process_block(&header).await?;
-            self.inner.maybe_flush().await?;
-        }
-
-        Ok(())
-    }
-}
-
-impl MainSync {
-    pub async fn start(
-        db: Db,
-        config: &Config,
-        rcv: UnboundedReceiver<Event>,
-    ) -> Result<JoinHandle<Result<()>>> {
-        let sync = Self {
-            inner: SyncInner::new(db, config).await?,
-            rcv,
-        };
-
-        Ok(tokio::spawn(async move { sync.run().await }))
-    }
-
-    pub async fn process_events(&mut self) -> Result<()> {
-        while let Ok(event) = self.rcv.try_recv() {
-            match event {
-                Event::AccountRegistered { address } => {
-                    self.inner.addresses.insert(address);
-                    self.inner.cuckoo.insert(&address);
-                    self.setup_backfill(address).await?;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// Create a new job for backfilling history for a new account
-    /// before the current sync point
-    async fn setup_backfill(&mut self, address: Address) -> Result<()> {
-        self.inner
-            .db
-            .create_backfill_job(
-                address.into(),
-                self.inner.chain.chain_id,
-                self.inner.chain.start_block,
-                (self.inner.next_block - 1) as i32,
-            )
-            .await?;
-        Ok(())
-    }
 }
 
 impl SyncInner {
