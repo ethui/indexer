@@ -15,6 +15,7 @@ serde = { version = "1.0", features = ["derive", "std"] }
 futures = "0.3.28"
 toml = "0.8.8"
 thiserror = "1.0.50"
+async-trait = "0.1.74"
 
 # tracing
 color-eyre = "0.6.2"
@@ -43,4 +44,6 @@ alloy-primitives = { version = "0.5.0", features = ["serde"] }
 # cuckoo
 scalable_cuckoo_filter = "0.2.3"
 rand = { version = "0.8.5", default-features = false, features = ["std_rng"] }
-async-trait = "0.1.74"
+
+[dev-dependencies]
+rstest = "0.18.2"

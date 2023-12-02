@@ -176,8 +176,8 @@ impl MainSync {
             .create_backfill_job(
                 address.into(),
                 self.inner.chain.chain_id,
-                (self.inner.next_block - 1) as i32,
                 self.inner.chain.start_block,
+                (self.inner.next_block - 1) as i32,
             )
             .await?;
         Ok(())

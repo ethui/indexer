@@ -1,9 +1,12 @@
 pub mod models;
 mod schema;
 mod types;
+mod utils;
 
 use color_eyre::Result;
-use diesel::{insert_into, prelude::*, update};
+use diesel::{delete, insert_into, prelude::*, update};
+use diesel_async::scoped_futures::ScopedFutureExt;
+use diesel_async::AsyncConnection;
 use diesel_async::{
     pooled_connection::{deadpool::Pool, AsyncDieselConnectionManager},
     AsyncPgConnection, RunQueryDsl,
@@ -12,6 +15,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tracing::instrument;
 
 use crate::config::{ChainConfig, Config};
+use crate::db::models::BackfillJob;
 use crate::events::Event;
 
 use self::models::{Chain, CreateTx};
@@ -106,7 +110,6 @@ impl Db {
     #[instrument(skip(self, txs), fields(txs = txs.len()))]
     pub async fn create_txs(&self, txs: Vec<CreateTx>) -> Result<()> {
         use schema::txs::dsl::*;
-
         let mut conn = self.pool.get().await?;
 
         let res = insert_into(txs)
@@ -127,7 +130,6 @@ impl Db {
         to_block: i32,
     ) -> Result<()> {
         use schema::backfill_jobs::dsl;
-
         let mut conn = self.pool.get().await?;
 
         let res = insert_into(dsl::backfill_jobs)
@@ -142,6 +144,53 @@ impl Db {
             .await;
 
         handle_error(res).await
+    }
+
+    pub async fn get_backfill_jobs(&self) -> Result<Vec<BackfillJob>> {
+        use schema::backfill_jobs::dsl;
+        let mut conn = self.pool.get().await?;
+
+        let res = dsl::backfill_jobs
+            .filter(dsl::chain_id.eq(self.chain_id))
+            .select(BackfillJob::as_select())
+            .order(dsl::from_block.desc())
+            .load(&mut conn)
+            .await?;
+
+        Ok(res)
+    }
+
+    /// Deletes all existing backfill jobs, and rearranges them for optimal I/O
+    /// See `utils::rearrange` for more details
+    pub async fn rearrange_backfill_jobs(&self) -> Result<()> {
+        use schema::backfill_jobs::dsl;
+        let mut conn = self.pool.get().await?;
+
+        conn.transaction::<_, diesel::result::Error, _>(|mut conn| {
+            async move {
+                let jobs = dsl::backfill_jobs
+                    .filter(dsl::chain_id.eq(self.chain_id))
+                    .select(BackfillJob::as_select())
+                    .order(dsl::from_block.desc())
+                    .load(&mut conn)
+                    .await?;
+
+                let rearranged = utils::rearrange(jobs, self.chain_id);
+
+                delete(dsl::backfill_jobs).execute(&mut conn).await?;
+
+                insert_into(dsl::backfill_jobs)
+                    .values(&rearranged)
+                    .execute(&mut conn)
+                    .await?;
+
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await?;
+
+        Ok(())
     }
 }
 
