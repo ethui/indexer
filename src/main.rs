@@ -18,7 +18,7 @@ async fn main() -> Result<()> {
     let (tx, rx) = mpsc::unbounded_channel();
     let config = Config::read()?;
     let db = db::Db::connect(&config, tx).await?;
-    let sync = sync::start_main(db.clone(), &config, rx).await?;
+    let sync = sync::MainSync::start(db.clone(), &config, rx).await?;
     let api = api::Api::start(db, config);
 
     // pin!(sync, db, api);
