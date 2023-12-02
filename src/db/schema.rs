@@ -10,9 +10,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    backfill_jobs (id) {
-        id -> Int4,
-        address -> Bytea,
+    backfill_jobs (chain_id, from_block, to_block) {
+        address -> Array<Nullable<Bytea>>,
         chain_id -> Int4,
         from_block -> Int4,
         to_block -> Int4,
@@ -40,6 +39,8 @@ diesel::table! {
         updated_at -> Timestamp,
     }
 }
+
+diesel::joinable!(backfill_jobs -> chains (chain_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     accounts,
