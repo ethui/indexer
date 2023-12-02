@@ -36,7 +36,7 @@ pub use backfill::BackfillSync;
 pub use main::MainSync;
 
 /// Generic sync job state
-pub(self) struct SyncInner {
+pub struct SyncInner {
     /// DB handle
     db: Db,
 
@@ -74,7 +74,7 @@ pub struct Match {
 }
 
 #[async_trait]
-pub(self) trait SyncJob {
+pub trait SyncJob {
     async fn run(mut self) -> Result<()>;
 }
 

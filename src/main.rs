@@ -1,7 +1,6 @@
 mod api;
 mod config;
 mod db;
-mod events;
 mod provider;
 mod sync;
 
@@ -15,16 +14,19 @@ use config::Config;
 async fn main() -> Result<()> {
     setup()?;
 
-    let (tx, rx) = mpsc::unbounded_channel();
+    let (account_tx, account_rx) = mpsc::unbounded_channel();
+    let (job_tx, job_rx) = mpsc::unbounded_channel();
     let config = Config::read()?;
-    let db = db::Db::connect(&config, tx).await?;
-    let sync = sync::MainSync::start(db.clone(), &config, rx).await?;
+    let db = db::Db::connect(&config, account_tx, job_tx).await?;
+
+    let sync = sync::MainSync::start(db.clone(), &config, account_rx).await?;
     let backfill = sync::BackfillSync::start(db.clone(), &config).await?;
     let api = api::Api::start(db, config);
 
     // pin!(sync, db, api);
-    let (sync, api) = futures::try_join!(sync, api)?;
+    let (sync, backfill, api) = futures::try_join!(sync, backfill, api)?;
     sync?;
+    backfill?;
     api?;
 
     Ok(())

@@ -5,7 +5,7 @@ use reth_provider::HeaderProvider;
 use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
 use tracing::instrument;
 
-use crate::{config::Config, db::Db, events::Event};
+use crate::{config::Config, db::Db};
 
 use super::{SyncInner, SyncJob};
 
@@ -20,7 +20,7 @@ pub struct MainSync {
     inner: SyncInner,
 
     /// Receiver for account registration events
-    rcv: UnboundedReceiver<Event>,
+    accounts_rcv: UnboundedReceiver<Address>,
 }
 
 #[async_trait]
@@ -28,7 +28,7 @@ impl SyncJob for MainSync {
     #[instrument(skip(self), fields(chain_id = self.inner.chain.chain_id))]
     async fn run(mut self) -> Result<()> {
         loop {
-            self.process_events().await?;
+            self.process_new_accounts().await?;
 
             match self
                 .inner
@@ -56,25 +56,21 @@ impl MainSync {
     pub async fn start(
         db: Db,
         config: &Config,
-        rcv: UnboundedReceiver<Event>,
+        accounts_rcv: UnboundedReceiver<Address>,
     ) -> Result<JoinHandle<Result<()>>> {
         let sync = Self {
             inner: SyncInner::new(db, config).await?,
-            rcv,
+            accounts_rcv,
         };
 
         Ok(tokio::spawn(async move { sync.run().await }))
     }
 
-    pub async fn process_events(&mut self) -> Result<()> {
-        while let Ok(event) = self.rcv.try_recv() {
-            match event {
-                Event::AccountRegistered { address } => {
-                    self.inner.addresses.insert(address);
-                    self.inner.cuckoo.insert(&address);
-                    self.setup_backfill(address).await?;
-                }
-            }
+    pub async fn process_new_accounts(&mut self) -> Result<()> {
+        while let Ok(address) = self.accounts_rcv.try_recv() {
+            self.inner.addresses.insert(address);
+            self.inner.cuckoo.insert(&address);
+            self.setup_backfill(address).await?;
         }
         Ok(())
     }
