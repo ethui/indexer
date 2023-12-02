@@ -11,7 +11,7 @@ use diesel::{
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize, AsExpression, FromSqlRow)]
+#[derive(Debug, Deserialize, Serialize, AsExpression, FromSqlRow, Clone)]
 #[diesel(sql_type=Bytea)]
 pub struct Address(pub alloy_primitives::Address);
 

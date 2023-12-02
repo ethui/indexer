@@ -1,13 +1,13 @@
 diff --git a/src/db/schema.rs b/src/db/schema.rs
-index c147275..8bb6b9d 100644
+index d105e29..7773c57 100644
 --- a/src/db/schema.rs
 +++ b/src/db/schema.rs
-@@ -4,7 +4,7 @@ diesel::table! {
-     accounts (id) {
-         id -> Int4,
-         address -> Bytea,
--        chain_ids -> Array<Nullable<Int4>>,
-+        chain_ids -> Array<Int4>,
-         created_at -> Timestamp,
-     }
- }
+@@ -11,7 +11,7 @@ diesel::table! {
+ 
+ diesel::table! {
+     backfill_jobs (chain_id, from_block, to_block) {
+-        addresses -> Array<Nullable<Bytea>>,
++        addresses -> Array<Bytea>,
+         chain_id -> Int4,
+         from_block -> Int4,
+         to_block -> Int4,

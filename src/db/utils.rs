@@ -29,7 +29,7 @@ pub fn rearrange(jobs: Vec<BackfillJob>, chain_id: i32) -> Vec<BackfillJob> {
                     break;
                 };
                 if job.from_block <= start && job.to_block >= end - 1 {
-                    addresses.push(job.address.0)
+                    addresses.extend_from_slice(&job.addresses)
                 }
             }
 
@@ -44,13 +44,11 @@ pub fn rearrange(jobs: Vec<BackfillJob>, chain_id: i32) -> Vec<BackfillJob> {
     range_map
         .into_iter()
         .for_each(|((from_block, to_block), addresses)| {
-            addresses.into_iter().for_each(|address| {
-                res.push(BackfillJob {
-                    address: address.into(),
-                    chain_id,
-                    from_block,
-                    to_block,
-                })
+            res.push(BackfillJob {
+                addresses,
+                chain_id,
+                from_block,
+                to_block,
             })
         });
 
@@ -89,7 +87,7 @@ mod tests {
                 BackfillJob {
                     from_block,
                     to_block,
-                    address,
+                    addresses: vec![address],
                     chain_id: 1,
                 }
             })
@@ -99,23 +97,15 @@ mod tests {
     // compares the rearranged results with expectation
     fn compare(mut result: Vec<BackfillJob>, mut expected: Vec<Expectation>) {
         while let Some(job) = result.pop() {
-            if let Some(ref mut e) = expected.iter_mut().find(|ref e| {
-                job.from_block == e.1
-                    && job.to_block == e.2
-                    && e.0.contains(&job.address.0.as_slice()[0])
-            }) {
-                if let Some(i) = e.0.iter().position(|a| *a == job.address.0[0]) {
-                    e.0.swap_remove(i);
-                    continue;
-                }
+            if let Some(ref mut e) = expected
+                .iter_mut()
+                .find(|e| job.from_block == e.1 && job.to_block == e.2)
+            {
+                assert_eq!(job.addresses.len(), e.0.len());
+                e.0.iter()
+                    .zip(job.addresses.iter())
+                    .for_each(|(a, b)| assert_eq!(a, &b.0.as_slice()[0]));
             }
-
-            panic!(
-                "Expected to find ({}, {}, {})",
-                job.address.0, job.from_block, job.to_block
-            );
         }
-
-        assert!(expected.iter().all(|e| e.0.is_empty()));
     }
 }

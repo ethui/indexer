@@ -134,7 +134,7 @@ impl Db {
 
         let res = insert_into(dsl::backfill_jobs)
             .values((
-                dsl::address.eq(address),
+                dsl::addresses.eq(vec![address]),
                 dsl::chain_id.eq(chain_id),
                 dsl::from_block.eq(from_block),
                 dsl::to_block.eq(to_block),
