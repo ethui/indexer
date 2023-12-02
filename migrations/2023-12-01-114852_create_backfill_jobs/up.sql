@@ -7,5 +7,5 @@ CREATE TABLE backfill_jobs (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  FOREIGN KEY (address, chain_id) REFERENCES accounts (address, chain_id)
+  FOREIGN KEY (chain_id, address) REFERENCES accounts (chain_id, address)
 );
