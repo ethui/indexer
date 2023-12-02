@@ -2373,6 +2373,7 @@ dependencies = [
  "actix-cors",
  "actix-web",
  "alloy-primitives",
+ "async-trait",
  "bigdecimal",
  "chrono",
  "clap",
