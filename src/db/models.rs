@@ -46,7 +46,7 @@ pub struct Chain {
 #[derive(Debug, Queryable, Selectable, Insertable)]
 #[diesel(table_name = backfill_jobs, check_for_backend(Pg))]
 pub struct BackfillJob {
-    pub address: Address,
+    pub addresses: Vec<Address>,
     pub chain_id: i32,
     pub from_block: i32,
     pub to_block: i32,

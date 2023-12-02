@@ -6,9 +6,8 @@ index d105e29..7773c57 100644
  
  diesel::table! {
      backfill_jobs (chain_id, from_block, to_block) {
--        address -> Array<Nullable<Bytea>>,
-+        address -> Array<Bytea>,
+-        addresses -> Array<Nullable<Bytea>>,
++        addresses -> Array<Bytea>,
          chain_id -> Int4,
          from_block -> Int4,
          to_block -> Int4,
-@@ -42,9 +42,4 @@ diesel::table! {

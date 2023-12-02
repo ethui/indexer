@@ -1,5 +1,5 @@
 CREATE TABLE backfill_jobs (
-  address BYTEA[] NOT NULL,
+  addresses BYTEA[] NOT NULL,
   chain_id INTEGER NOT NULL,
   from_block INTEGER NOT NULL,
   to_block INTEGER NOT NULL,
