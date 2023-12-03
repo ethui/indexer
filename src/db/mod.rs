@@ -2,7 +2,8 @@ pub mod models;
 mod schema;
 pub mod types;
 
-use color_eyre::Result;
+use color_eyre::{eyre::eyre, Result};
+use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use tokio::sync::mpsc::UnboundedSender;
 
 use diesel::{delete, insert_into, prelude::*, update};
@@ -22,6 +23,8 @@ use self::{
     models::{Chain, CreateTx},
     types::Address,
 };
+
+const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 /// An abstract DB connection
 /// In production, `PgBackend` is meant to be used, but the trait allows for the existance of
@@ -49,15 +52,33 @@ impl Db {
         new_accounts_tx: UnboundedSender<alloy_primitives::Address>,
         new_job_tx: UnboundedSender<()>,
     ) -> Result<Self> {
+        Self::migrate(&config.db.url).await?;
+
         let db_config =
             AsyncDieselConnectionManager::<AsyncPgConnection>::new(config.db.url.clone());
         let pool = Pool::builder(db_config).build()?;
+
         Ok(Self {
             pool,
             new_accounts_tx,
             new_job_tx,
             chain_id: config.chain.chain_id,
         })
+    }
+
+    #[instrument(skip(url))]
+    async fn migrate(url: &str) -> Result<()> {
+        let url = url.to_owned();
+
+        tokio::task::spawn_blocking(move || {
+            let mut conn = PgConnection::establish(&url).expect("Failed to connect to DB");
+            conn.run_pending_migrations(MIGRATIONS)
+                .map(|_| ())
+                .map_err(|e| eyre!("{}", e))
+        })
+        .await??;
+
+        Ok(())
     }
 
     /// Seeds the database with a chain configuration
