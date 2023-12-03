@@ -5,13 +5,15 @@ mod rearrange;
 mod sync;
 
 use color_eyre::eyre::Result;
-use tokio::sync::mpsc;
+use tokio::{signal, sync::mpsc};
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use tracing::info;
 use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter};
 
 use config::Config;
 
 use self::db::Db;
-use self::sync::{BackfillManager, Forward};
+use self::sync::{BackfillManager, Forward, SyncJob};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -22,16 +24,27 @@ async fn main() -> Result<()> {
     let (account_tx, account_rx) = mpsc::unbounded_channel();
     let (job_tx, job_rx) = mpsc::unbounded_channel();
     let db = Db::connect(&config, account_tx, job_tx).await?;
+    let chain = db.setup_chain(&config.chain).await?;
 
-    let sync = Forward::start(db.clone(), &config, account_rx).await?;
-    let backfill = BackfillManager::start(db.clone(), &config, job_rx).await?;
-    let api = config.http.map(|c| api::start(db, c));
+    // setup each task
+    let token = CancellationToken::new();
+    let sync = Forward::new(db.clone(), &config, chain, account_rx, token.clone()).await?;
+    let backfill = BackfillManager::new(db.clone(), &config, job_rx, token.clone());
+    let api = config.http.map(|c| api::start(db.clone(), c));
 
-    sync.await??;
-    backfill.await??;
-    if let Some(api) = api {
-        api.await??
-    };
+    // spawn and track all tasks
+    let tracker = TaskTracker::new();
+    tracker.spawn(sync.run());
+    tracker.spawn(backfill.run());
+    api.map(|t| tracker.spawn(t));
+
+    // termination handling
+    signal::ctrl_c().await?;
+    token.cancel();
+    tracker.close();
+    tracker.wait().await;
+
+    info!("graceful shutdown achieved. Closing");
 
     Ok(())
 }

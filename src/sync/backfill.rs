@@ -4,11 +4,11 @@ use async_trait::async_trait;
 use color_eyre::eyre::Result;
 use tokio::select;
 use tokio::{
-    sync::{broadcast, mpsc::UnboundedReceiver, RwLock, Semaphore},
-    task::JoinHandle,
+    sync::{mpsc::UnboundedReceiver, RwLock, Semaphore},
     time::sleep,
 };
-use tracing::instrument;
+use tokio_util::sync::CancellationToken;
+use tracing::{info, instrument};
 
 use crate::{
     config::Config,
@@ -27,29 +27,30 @@ pub struct BackfillManager {
     concurrency: usize,
     jobs_rcv: UnboundedReceiver<()>,
     config: Arc<RwLock<Config>>,
+    cancellation_token: CancellationToken,
 }
 
 impl BackfillManager {
-    pub async fn start(
+    pub fn new(
         db: Db,
         config: &Config,
         jobs_rcv: UnboundedReceiver<()>,
-    ) -> Result<JoinHandle<Result<()>>> {
-        let sync = Self {
+        cancellation_token: CancellationToken,
+    ) -> Self {
+        Self {
             db,
             jobs_rcv,
             config: Arc::new(RwLock::new(config.clone())),
             concurrency: config.sync.backfill_concurrency,
-        };
-
-        Ok(tokio::spawn(async move { sync.run().await }))
+            cancellation_token,
+        }
     }
 
     #[instrument(name = "backfill", skip(self))]
-    async fn run(mut self) -> Result<()> {
+    pub async fn run(mut self) -> Result<()> {
         loop {
             let semaphore = Arc::new(Semaphore::new(self.concurrency));
-            let (shutdown, _) = broadcast::channel(1);
+            let inner_cancel = CancellationToken::new();
 
             self.db.rorg_backfill_jobs().await?;
 
@@ -62,15 +63,13 @@ impl BackfillManager {
                     let db = self.db.clone();
                     let semaphore = semaphore.clone();
                     let config = self.config.clone();
-                    let mut shutdown = shutdown.subscribe();
+                    let token = inner_cancel.clone();
                     tokio::spawn(async move {
                         let _permit = semaphore.acquire().await.unwrap();
-                        if shutdown.try_recv().is_ok() {
+                        if token.is_cancelled() {
                             return Ok(());
                         }
-                        let worker = Backfill::new_worker(db, config, job, shutdown)
-                            .await
-                            .unwrap();
+                        let worker = Backfill::new_worker(db, config, job, token).await.unwrap();
                         worker.run().await
                     })
                 })
@@ -79,17 +78,25 @@ impl BackfillManager {
             // wait for a new job, or a preset delay, whichever comes first
             let timeout = sleep(Duration::from_secs(10 * 60));
             select! {
-                _ = timeout => {dbg!("timeout");}
-                Some(_) = self.jobs_rcv.recv() => {dbg!("rcv");}
+                _ = self.cancellation_token.cancelled() => {}
+                _ = timeout => {}
+                Some(_) = self.jobs_rcv.recv() => {}
             }
 
             // shutdown, time to re-org and reprioritize
-            dbg!("sending");
-            shutdown.send(())?;
+            inner_cancel.cancel();
             for worker in workers {
                 worker.await.unwrap().unwrap();
             }
+            if self.cancellation_token.is_cancelled() {
+                break;
+            } else {
+                info!("rotating backfill workers");
+            }
         }
+
+        info!("closing backfill manager");
+        Ok(())
     }
 }
 
@@ -97,7 +104,6 @@ pub struct Backfill {
     job_id: i32,
     high: u64,
     low: u64,
-    shutdown: broadcast::Receiver<()>,
 }
 #[async_trait]
 impl SyncJob for Worker<Backfill> {
@@ -105,7 +111,7 @@ impl SyncJob for Worker<Backfill> {
     async fn run(mut self) -> Result<()> {
         for block in (self.inner.low..self.inner.high).rev() {
             // start by checking shutdown signal
-            if self.inner.shutdown.try_recv().is_ok() {
+            if self.cancellation_token.is_cancelled() {
                 break;
             }
 
@@ -118,6 +124,7 @@ impl SyncJob for Worker<Backfill> {
         // this needs to be part of BackfillJob, not just Inner
         self.flush(self.inner.low).await?;
 
+        info!("closing backfill worker");
         Ok(())
     }
 }
@@ -149,7 +156,7 @@ impl Backfill {
         db: Db,
         config: Arc<RwLock<Config>>,
         job: BackfillJobWithId,
-        shutdown: broadcast::Receiver<()>,
+        cancellation_token: CancellationToken,
     ) -> Result<Worker<Self>> {
         let config = config.read().await;
         let chain = db.setup_chain(&config.chain).await?;
@@ -158,9 +165,8 @@ impl Backfill {
             job_id: job.id,
             high: job.high as u64,
             low: job.low as u64,
-            shutdown,
         };
 
-        Worker::new(s, db, &config, chain).await
+        Worker::new(s, db, &config, chain, cancellation_token).await
     }
 }

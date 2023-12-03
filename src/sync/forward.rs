@@ -1,9 +1,11 @@
 use alloy_primitives::Address;
 use async_trait::async_trait;
 use color_eyre::eyre::Result;
-use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
-use tracing::instrument;
+use tokio::sync::mpsc::UnboundedReceiver;
+use tokio_util::sync::CancellationToken;
+use tracing::{info, instrument};
 
+use crate::db::models::Chain;
 use crate::{config::Config, db::Db};
 
 use super::provider::Provider;
@@ -28,6 +30,10 @@ impl SyncJob for Worker<Forward> {
         self.inner.next_block = (self.chain.last_known_block as u64) + 1;
 
         loop {
+            if self.cancellation_token.is_cancelled() {
+                break;
+            }
+
             self.process_new_accounts().await?;
 
             match self.provider.block_header(self.inner.next_block)? {
@@ -45,6 +51,9 @@ impl SyncJob for Worker<Forward> {
                 }
             }
         }
+
+        info!("closing");
+        Ok(())
     }
 }
 
@@ -95,14 +104,14 @@ impl Worker<Forward> {
 }
 
 impl Forward {
-    pub async fn start(
+    pub async fn new(
         db: Db,
         config: &Config,
+        chain: Chain,
         accounts_rcv: UnboundedReceiver<Address>,
-    ) -> Result<JoinHandle<Result<()>>> {
-        let chain = db.setup_chain(&config.chain).await?;
-
-        let sync = Worker::new(
+        cancellation_token: CancellationToken,
+    ) -> Result<Worker<Self>> {
+        Worker::new(
             Forward {
                 accounts_rcv,
                 next_block: (chain.last_known_block as u64) + 1,
@@ -110,9 +119,8 @@ impl Forward {
             db,
             config,
             chain,
+            cancellation_token,
         )
-        .await?;
-
-        Ok(tokio::spawn(async move { sync.run().await }))
+        .await
     }
 }

@@ -15,6 +15,7 @@ use rand::{rngs::StdRng, SeedableRng};
 use reth_primitives::Header;
 use scalable_cuckoo_filter::{DefaultHasher, ScalableCuckooFilter, ScalableCuckooFilterBuilder};
 use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
 use tracing::trace;
 
 use crate::{
@@ -51,6 +52,9 @@ pub struct Worker<T> {
 
     /// Desired buffer capacity, and threshold at which to flush it
     buffer_capacity: usize,
+
+    /// Cancellation token for graceful shutdown
+    cancellation_token: CancellationToken,
 }
 
 /// A match between an address and a transaction
@@ -67,7 +71,13 @@ pub trait SyncJob {
 }
 
 impl<T> Worker<T> {
-    async fn new(inner: T, db: Db, config: &Config, chain: Chain) -> Result<Self> {
+    async fn new(
+        inner: T,
+        db: Db,
+        config: &Config,
+        chain: Chain,
+        cancellation_token: CancellationToken,
+    ) -> Result<Self> {
         let provider = RethDBProvider::new(config, &chain)?;
 
         let addresses: BTreeSet<_> = db.get_addresses().await?.into_iter().map(|a| a.0).collect();
@@ -89,6 +99,7 @@ impl<T> Worker<T> {
             provider,
             buffer: Vec::with_capacity(config.sync.buffer_size),
             buffer_capacity: config.sync.buffer_size,
+            cancellation_token,
         })
     }
 

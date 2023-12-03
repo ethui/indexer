@@ -7,8 +7,7 @@ use tokio::task::JoinHandle;
 use tracing::instrument;
 use tracing_actix_web::TracingLogger;
 
-use crate::config::HttpConfig;
-use crate::db::Db;
+use crate::{config::HttpConfig, db::Db};
 
 #[instrument(name = "api", skip(db, config), fields(port = config.port))]
 pub fn start(db: Db, config: HttpConfig) -> JoinHandle<std::result::Result<(), std::io::Error>> {
@@ -26,7 +25,6 @@ pub fn start(db: Db, config: HttpConfig) -> JoinHandle<std::result::Result<(), s
             .service(routes::register)
             .app_data(web::Data::new(db.clone()))
     })
-    .disable_signals()
     .bind(("0.0.0.0", config.port))
     .unwrap();
 
