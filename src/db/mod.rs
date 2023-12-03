@@ -1,15 +1,13 @@
 pub mod models;
 mod schema;
 mod types;
-mod utils;
 
 use color_eyre::Result;
 use diesel::{delete, insert_into, prelude::*, update};
-use diesel_async::scoped_futures::ScopedFutureExt;
-use diesel_async::AsyncConnection;
 use diesel_async::{
     pooled_connection::{deadpool::Pool, AsyncDieselConnectionManager},
-    AsyncPgConnection, RunQueryDsl,
+    scoped_futures::ScopedFutureExt,
+    AsyncConnection, AsyncPgConnection, RunQueryDsl,
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::instrument;
@@ -17,8 +15,10 @@ use tracing::instrument;
 use crate::config::{ChainConfig, Config};
 use crate::db::models::{BackfillJob, BackfillJobWithId};
 
-use self::models::{Chain, CreateTx};
-use self::types::Address;
+use self::{
+    models::{Chain, CreateTx},
+    types::Address,
+};
 
 #[derive(Clone)]
 pub struct Db {
@@ -194,7 +194,7 @@ impl Db {
                     .load(&mut conn)
                     .await?;
 
-                let rearranged = utils::rearrange(jobs, self.chain_id);
+                let rearranged = crate::rearrange::rearrange(jobs, self.chain_id);
 
                 delete(dsl::backfill_jobs).execute(&mut conn).await?;
 
