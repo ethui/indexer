@@ -119,6 +119,28 @@ impl SyncJob for Worker<Backfill> {
 
         Ok(())
     }
+
+    /// if the buffer is sufficiently large, flush it to the database
+    /// and update chain tip
+    pub async fn maybe_flush(&mut self) -> Result<()> {
+        if self.buffer.len() >= self.buffer_capacity {
+            self.flush().await?;
+        }
+
+        Ok(())
+    }
+
+    // empties the buffer and updates chain tip
+    pub async fn flush(&mut self) -> Result<()> {
+        // let txs = self.drain_buffer();
+        //
+        // self.db.create_txs(txs).await?;
+        // self.db
+        //     .update_chain(self.chain.chain_id as u64, self.next_block)
+        //     .await?;
+
+        Ok(())
+    }
 }
 
 impl Backfill {
