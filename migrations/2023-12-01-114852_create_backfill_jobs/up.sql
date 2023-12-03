@@ -2,10 +2,10 @@ CREATE TABLE backfill_jobs (
   id SERIAL NOT NULL,
   addresses BYTEA[] NOT NULL,
   chain_id INTEGER NOT NULL,
-  from_block INTEGER NOT NULL,
-  to_block INTEGER NOT NULL,
+  low INTEGER NOT NULL,
+  high INTEGER NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (chain_id, from_block, to_block),
+  PRIMARY KEY (id),
   FOREIGN KEY (chain_id) REFERENCES chains (chain_id)
 );

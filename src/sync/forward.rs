@@ -18,27 +18,30 @@ use super::{SyncJob, Worker};
 pub struct Forward {
     /// Receiver for account registration events
     accounts_rcv: UnboundedReceiver<Address>,
+    next_block: u64,
 }
 
 #[async_trait]
 impl SyncJob for Worker<Forward> {
     #[instrument(skip(self), fields(chain_id = self.chain.chain_id))]
     async fn run(mut self) -> Result<()> {
+        self.inner.next_block = (self.chain.last_known_block as u64) + 1;
+
         loop {
             self.process_new_accounts().await?;
 
-            match self.provider.header_by_number(self.next_block)? {
+            match self.provider.header_by_number(self.inner.next_block)? {
                 // got a block. process it, only flush if needed
                 Some(header) => {
                     self.process_block(&header).await?;
                     self.maybe_flush().await?;
-                    self.next_block += 1;
+                    self.inner.next_block += 1;
                 }
 
                 // no block found. take the wait chance to flush, and wait for new block
                 None => {
                     self.flush().await?;
-                    self.wait_new_block(self.next_block).await?;
+                    self.wait_new_block(self.inner.next_block).await?;
                 }
             }
         }
@@ -63,7 +66,7 @@ impl Worker<Forward> {
                 address.into(),
                 self.chain.chain_id,
                 self.chain.start_block,
-                (self.next_block - 1) as i32,
+                self.inner.next_block as i32,
             )
             .await?;
         Ok(())
@@ -85,7 +88,7 @@ impl Worker<Forward> {
 
         self.db.create_txs(txs).await?;
         self.db
-            .update_chain(self.chain.chain_id as u64, self.next_block)
+            .update_chain(self.chain.chain_id as u64, self.inner.next_block)
             .await?;
 
         Ok(())
@@ -98,7 +101,18 @@ impl Forward {
         config: &Config,
         accounts_rcv: UnboundedReceiver<Address>,
     ) -> Result<JoinHandle<Result<()>>> {
-        let sync = Worker::new(Forward { accounts_rcv }, db, config).await?;
+        let chain = db.setup_chain(&config.chain).await?;
+
+        let sync = Worker::new(
+            Forward {
+                accounts_rcv,
+                next_block: (chain.last_known_block as u64) + 1,
+            },
+            db,
+            config,
+            chain,
+        )
+        .await?;
 
         Ok(tokio::spawn(async move { sync.run().await }))
     }

@@ -10,12 +10,12 @@ diesel::table! {
 }
 
 diesel::table! {
-    backfill_jobs (chain_id, from_block, to_block) {
+    backfill_jobs (id) {
         id -> Int4,
         addresses -> Array<Bytea>,
         chain_id -> Int4,
-        from_block -> Int4,
-        to_block -> Int4,
+        low -> Int4,
+        high -> Int4,
         created_at -> Timestamp,
         updated_at -> Timestamp,
     }

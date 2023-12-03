@@ -58,9 +58,6 @@ pub struct Worker<T> {
     /// Desired buffer capacity, and threshold at which to flush it
     buffer_capacity: usize,
 
-    /// Current block number being processed or waited for
-    next_block: u64,
-
     /// Reth Provider factory
     factory: ProviderFactory<DatabaseEnv>,
 
@@ -82,8 +79,7 @@ pub trait SyncJob {
 }
 
 impl<T> Worker<T> {
-    async fn new(inner: T, db: Db, config: &Config) -> Result<Self> {
-        let chain = db.setup_chain(&config.chain).await?;
+    async fn new(inner: T, db: Db, config: &Config, chain: Chain) -> Result<Self> {
         let factory = provider_factory(chain.chain_id as u64, &config.reth)?;
         let provider: reth_provider::DatabaseProvider<Tx<RO>> = factory.provider()?;
 
@@ -99,7 +95,6 @@ impl<T> Worker<T> {
         Ok(Self {
             inner,
             db,
-            next_block: chain.last_known_block as u64 + 1,
             chain,
             addresses: config.sync.seed_addresses.clone(),
             cuckoo,

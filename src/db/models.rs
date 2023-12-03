@@ -48,8 +48,11 @@ pub struct Chain {
 pub struct BackfillJob {
     pub addresses: Vec<Address>,
     pub chain_id: i32,
-    pub from_block: i32,
-    pub to_block: i32,
+    /// The low (oldest) block number
+    pub low: i32,
+
+    /// The high (newest) block number
+    pub high: i32,
 }
 
 #[derive(Debug, Queryable, Selectable, Insertable)]
@@ -58,6 +61,10 @@ pub struct BackfillJobWithId {
     pub id: i32,
     pub addresses: Vec<Address>,
     pub chain_id: i32,
-    pub from_block: i32,
-    pub to_block: i32,
+
+    /// The low (oldest) block number
+    pub low: i32,
+
+    /// The high (newest) block number
+    pub high: i32,
 }

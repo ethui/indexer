@@ -92,8 +92,9 @@ impl BackfillManager {
 }
 
 pub struct Backfill {
-    from: u64,
-    to: u64,
+    job_id: i32,
+    high: u64,
+    low: u64,
     shutdown: broadcast::Receiver<()>,
 }
 
@@ -101,43 +102,42 @@ pub struct Backfill {
 impl SyncJob for Worker<Backfill> {
     #[instrument(skip(self), fields(chain_id = self.chain.chain_id))]
     async fn run(mut self) -> Result<()> {
-        for block in (self.inner.from..=self.inner.to).rev() {
+        for block in (self.inner.low..self.inner.high).rev() {
             // start by checking shutdown signal
             if self.inner.shutdown.try_recv().is_ok() {
                 break;
             }
 
-            self.next_block = block;
             let header = self.provider.header_by_number(block)?.unwrap();
             self.process_block(&header).await?;
-            self.maybe_flush().await?;
+            self.maybe_flush(block).await?;
         }
 
         // TODO: flush needs to properly update the job
         // this needs to be part of BackfillJob, not just Inner
-        self.flush().await?;
+        self.flush(self.inner.low).await?;
 
         Ok(())
     }
+}
 
+impl Worker<Backfill> {
     /// if the buffer is sufficiently large, flush it to the database
     /// and update chain tip
-    pub async fn maybe_flush(&mut self) -> Result<()> {
+    pub async fn maybe_flush(&mut self, last_block: u64) -> Result<()> {
         if self.buffer.len() >= self.buffer_capacity {
-            self.flush().await?;
+            self.flush(last_block).await?;
         }
 
         Ok(())
     }
 
     // empties the buffer and updates chain tip
-    pub async fn flush(&mut self) -> Result<()> {
-        // let txs = self.drain_buffer();
-        //
-        // self.db.create_txs(txs).await?;
-        // self.db
-        //     .update_chain(self.chain.chain_id as u64, self.next_block)
-        //     .await?;
+    pub async fn flush(&mut self, last_block: u64) -> Result<()> {
+        let txs = self.drain_buffer();
+
+        self.db.create_txs(txs).await?;
+        self.db.update_job(self.inner.job_id, last_block).await?;
 
         Ok(())
     }
@@ -151,12 +151,15 @@ impl Backfill {
         shutdown: broadcast::Receiver<()>,
     ) -> Result<Worker<Self>> {
         let config = config.read().await;
+        let chain = db.setup_chain(&config.chain).await?;
+
         let s = Self {
-            from: job.to_block as u64,
-            to: job.from_block as u64,
+            job_id: job.id,
+            high: job.high as u64,
+            low: job.low as u64,
             shutdown,
         };
 
-        Worker::new(s, db, &config).await
+        Worker::new(s, db, &config, chain).await
     }
 }
