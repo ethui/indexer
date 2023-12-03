@@ -7,10 +7,11 @@ use tokio::task::JoinHandle;
 use tracing::instrument;
 use tracing_actix_web::TracingLogger;
 
-use crate::{config::Config, db::Db};
+use crate::config::HttpConfig;
+use crate::db::Db;
 
-#[instrument(name = "api", skip(db, config), fields(port = config.http.port))]
-pub fn start(db: Db, config: Config) -> JoinHandle<std::result::Result<(), std::io::Error>> {
+#[instrument(name = "api", skip(db, config), fields(port = config.port))]
+pub fn start(db: Db, config: HttpConfig) -> JoinHandle<std::result::Result<(), std::io::Error>> {
     let server = HttpServer::new(move || {
         let cors = Cors::default()
             .allow_any_origin()
@@ -26,7 +27,7 @@ pub fn start(db: Db, config: Config) -> JoinHandle<std::result::Result<(), std::
             .app_data(web::Data::new(db.clone()))
     })
     .disable_signals()
-    .bind(("0.0.0.0", config.http.port))
+    .bind(("0.0.0.0", config.port))
     .unwrap();
 
     tokio::spawn(server.run())

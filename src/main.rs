@@ -25,13 +25,13 @@ async fn main() -> Result<()> {
 
     let sync = Forward::start(db.clone(), &config, account_rx).await?;
     let backfill = BackfillManager::start(db.clone(), &config, job_rx).await?;
-    let api = api::start(db, config);
+    let api = config.http.map(|c| api::start(db, c));
 
-    // pin!(sync, db, api);
-    let (sync, backfill, api) = futures::try_join!(sync, backfill, api)?;
-    sync?;
-    backfill?;
-    api?;
+    sync.await??;
+    backfill.await??;
+    if let Some(api) = api {
+        api.await??
+    };
 
     Ok(())
 }

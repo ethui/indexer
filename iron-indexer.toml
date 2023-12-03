@@ -6,12 +6,10 @@ chain_id = 11155111
 start_block = 4700000
 
 [sync]
-# test list of all Sepolia USDC holders
-seed_addresses = [
-  "0xae6444feb36d2b0e4dc93f1f012882d7c5db8f2d",
-  "0x89a5f2c62213b18ee5f83b21cb1a323920c9b101",
-]
 buffer_size = 1000
+
+[http]
+port = 8080
 
 [db]
 url = "postgres://iron_indexer:iron-indexer&12345@localhost/iron_indexer"

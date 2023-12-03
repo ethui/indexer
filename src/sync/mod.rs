@@ -70,12 +70,13 @@ impl<T> Worker<T> {
     async fn new(inner: T, db: Db, config: &Config, chain: Chain) -> Result<Self> {
         let provider = RethDBProvider::new(config, &chain)?;
 
+        let addresses: BTreeSet<_> = db.get_addresses().await?.into_iter().map(|a| a.0).collect();
         let mut cuckoo = ScalableCuckooFilterBuilder::new()
-            .initial_capacity(1000)
+            .initial_capacity(addresses.len())
             .rng(StdRng::from_entropy())
             .finish();
 
-        config.sync.seed_addresses.iter().for_each(|addr| {
+        addresses.iter().for_each(|addr| {
             cuckoo.insert(addr);
         });
 
@@ -83,7 +84,7 @@ impl<T> Worker<T> {
             inner,
             db,
             chain,
-            addresses: config.sync.seed_addresses.clone(),
+            addresses,
             cuckoo,
             provider,
             buffer: Vec::with_capacity(config.sync.buffer_size),

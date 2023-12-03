@@ -126,6 +126,18 @@ impl Db {
         handle_error(res).await
     }
 
+    pub async fn get_addresses(&self) -> Result<Vec<Address>> {
+        use schema::accounts::dsl;
+        let mut conn = self.pool.get().await?;
+
+        let res = dsl::accounts
+            .filter(dsl::chain_id.eq(self.chain_id))
+            .select(dsl::address)
+            .load(&mut conn)
+            .await?;
+        Ok(res)
+    }
+
     #[instrument(skip(self, txs), fields(txs = txs.len()))]
     pub async fn create_txs(&self, txs: Vec<CreateTx>) -> Result<()> {
         use schema::txs::dsl;
@@ -181,7 +193,7 @@ impl Db {
     /// Deletes all existing backfill jobs, and rearranges them for optimal I/O
     /// See `utils::rearrange` for more details
     #[instrument(skip(self))]
-    pub async fn rearrange_backfill_jobs(&self) -> Result<()> {
+    pub async fn rorg_backfill_jobs(&self) -> Result<()> {
         use schema::backfill_jobs::dsl;
         let mut conn = self.pool.get().await?;
 

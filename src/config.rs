@@ -1,6 +1,5 @@
-use std::{collections::BTreeSet, path::PathBuf};
+use std::path::PathBuf;
 
-use alloy_primitives::Address;
 use clap::Parser;
 use color_eyre::eyre::Result;
 use serde::Deserialize;
@@ -18,7 +17,7 @@ pub struct Config {
     pub sync: SyncConfig,
 
     #[serde(default)]
-    pub http: HttpConfig,
+    pub http: Option<HttpConfig>,
 
     pub db: DbConfig,
 }
@@ -37,8 +36,6 @@ pub struct ChainConfig {
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct SyncConfig {
-    pub seed_addresses: BTreeSet<Address>,
-
     #[serde(default = "default_buffer_size")]
     pub buffer_size: usize,
 

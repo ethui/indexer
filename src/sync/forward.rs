@@ -23,7 +23,7 @@ pub struct Forward {
 
 #[async_trait]
 impl SyncJob for Worker<Forward> {
-    #[instrument(skip(self), fields(chain_id = self.chain.chain_id))]
+    #[instrument(name = "forward", skip(self), fields(chain_id = self.chain.chain_id))]
     async fn run(mut self) -> Result<()> {
         self.inner.next_block = (self.chain.last_known_block as u64) + 1;
 

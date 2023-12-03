@@ -45,13 +45,13 @@ impl BackfillManager {
         Ok(tokio::spawn(async move { sync.run().await }))
     }
 
-    #[instrument(skip(self))]
+    #[instrument(name = "backfill", skip(self))]
     async fn run(mut self) -> Result<()> {
         loop {
             let semaphore = Arc::new(Semaphore::new(self.concurrency));
             let (shutdown, _) = broadcast::channel(1);
 
-            self.db.rearrange_backfill_jobs().await?;
+            self.db.rorg_backfill_jobs().await?;
 
             let workers = self
                 .db
