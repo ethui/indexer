@@ -20,7 +20,7 @@ async fn main() -> Result<()> {
     let db = db::Db::connect(&config, account_tx, job_tx).await?;
 
     let sync = sync::MainSync::start(db.clone(), &config, account_rx).await?;
-    let backfill = sync::BackfillSync::start(db.clone(), &config).await?;
+    let backfill = sync::BackfillSync::start(db.clone(), &config, job_rx).await?;
     let api = api::Api::start(db, config);
 
     // pin!(sync, db, api);

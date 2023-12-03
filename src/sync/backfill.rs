@@ -6,7 +6,7 @@ use color_eyre::eyre::Result;
 use reth_provider::HeaderProvider;
 use tokio::select;
 use tokio::sync::mpsc::UnboundedReceiver;
-use tokio::sync::{broadcast, Semaphore};
+use tokio::sync::{broadcast, RwLock, Semaphore};
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tracing::instrument;
@@ -25,6 +25,7 @@ pub struct BackfillSync {
     db: Db,
     concurrency: usize,
     jobs_rcv: UnboundedReceiver<()>,
+    config: Arc<RwLock<Config>>,
 }
 
 impl BackfillSync {
@@ -36,6 +37,7 @@ impl BackfillSync {
         let sync = Self {
             db,
             jobs_rcv,
+            config: Arc::new(RwLock::new(config.clone())),
             concurrency: config.sync.backfill_concurrency,
         };
 
@@ -58,10 +60,14 @@ impl BackfillSync {
                 .map(|job| {
                     let db = self.db.clone();
                     let semaphore = semaphore.clone();
-                    let shutdown = shutdown.subscribe();
+                    let config = self.config.clone();
+                    let mut shutdown = shutdown.subscribe();
                     tokio::spawn(async move {
                         let _permit = semaphore.acquire().await.unwrap();
-                        let worker = Worker::new(db, job, shutdown);
+                        if shutdown.try_recv().is_ok() {
+                            return Ok(());
+                        }
+                        let worker = Worker::new(db, config, job, shutdown).await.unwrap();
                         worker.run().await
                     })
                 })
@@ -77,7 +83,7 @@ impl BackfillSync {
             // shutdown, time to re-org and reprioritize
             shutdown.send(())?;
             for worker in workers {
-                worker.await?;
+                worker.await.unwrap().unwrap();
             }
         }
     }
@@ -115,12 +121,18 @@ impl SyncJob for Worker {
 }
 
 impl Worker {
-    fn new(db: Db, job: BackfillJobWithId, shutdown: broadcast::Receiver<()>) -> Self {
-        Self {
+    async fn new(
+        db: Db,
+        config: Arc<RwLock<Config>>,
+        job: BackfillJobWithId,
+        shutdown: broadcast::Receiver<()>,
+    ) -> Result<Self> {
+        let config = config.read().await;
+        Ok(Self {
             from: job.to_block as u64,
             to: job.from_block as u64,
             shutdown,
-            inner: todo!(),
-        }
+            inner: SyncInner::new(db, &config).await?,
+        })
     }
 }
