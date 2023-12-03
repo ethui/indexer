@@ -1,12 +1,13 @@
 mod backfill;
 mod forward;
+mod utils;
 
 use std::{
     collections::{BTreeSet, HashSet},
     time::Duration,
 };
 
-use alloy_primitives::{Address, FixedBytes, B256};
+use alloy_primitives::{Address, B256};
 use async_trait::async_trait;
 use color_eyre::eyre::Result;
 use rand::{rngs::StdRng, SeedableRng};
@@ -57,9 +58,6 @@ pub struct Worker<T> {
     /// Desired buffer capacity, and threshold at which to flush it
     buffer_capacity: usize,
 
-    /// Current block number being processed or waited for
-    next_block: u64,
-
     /// Reth Provider factory
     factory: ProviderFactory<DatabaseEnv>,
 
@@ -81,8 +79,7 @@ pub trait SyncJob {
 }
 
 impl<T> Worker<T> {
-    async fn new(inner: T, db: Db, config: &Config) -> Result<Self> {
-        let chain = db.setup_chain(&config.chain).await?;
+    async fn new(inner: T, db: Db, config: &Config, chain: Chain) -> Result<Self> {
         let factory = provider_factory(chain.chain_id as u64, &config.reth)?;
         let provider: reth_provider::DatabaseProvider<Tx<RO>> = factory.provider()?;
 
@@ -98,7 +95,6 @@ impl<T> Worker<T> {
         Ok(Self {
             inner,
             db,
-            next_block: chain.last_known_block as u64 + 1,
             chain,
             addresses: config.sync.seed_addresses.clone(),
             cuckoo,
@@ -109,20 +105,8 @@ impl<T> Worker<T> {
         })
     }
 
-    /// if the buffer is sufficiently large, flush it to the database
-    /// and update chain tip
-    pub async fn maybe_flush(&mut self) -> Result<()> {
-        if self.buffer.len() >= self.buffer_capacity {
-            self.flush().await?;
-        }
-
-        Ok(())
-    }
-
-    // empties the buffer and updates chain tip
-    pub async fn flush(&mut self) -> Result<()> {
-        let txs: Vec<_> = self
-            .buffer
+    pub fn drain_buffer(&mut self) -> Vec<CreateTx> {
+        self.buffer
             .drain(..)
             .map(|m| CreateTx {
                 address: m.address.into(),
@@ -130,14 +114,7 @@ impl<T> Worker<T> {
                 hash: m.hash.into(),
                 block_number: m.block_number as i32,
             })
-            .collect();
-
-        self.db.create_txs(txs).await?;
-        self.db
-            .update_chain(self.chain.chain_id as u64, self.next_block)
-            .await?;
-
-        Ok(())
+            .collect()
     }
 
     async fn wait_new_block(&mut self, block: u64) -> Result<()> {
@@ -176,7 +153,7 @@ impl<T> Worker<T> {
             let mut addresses: HashSet<_> = receipt
                 .logs
                 .into_iter()
-                .flat_map(|log| log.topics.into_iter().filter_map(topic_as_address))
+                .flat_map(|log| log.topics.into_iter().filter_map(utils::topic_as_address))
                 .collect();
 
             tx.recover_signer().map(|a| addresses.insert(a));
@@ -196,16 +173,5 @@ impl<T> Worker<T> {
         }
 
         Ok(())
-    }
-}
-
-fn topic_as_address(topic: FixedBytes<32>) -> Option<Address> {
-    let padding_slice = &topic.as_slice()[0..12];
-    let padding: FixedBytes<12> = FixedBytes::from_slice(padding_slice);
-
-    if padding.is_zero() {
-        Some(Address::from_slice(&topic[12..]))
-    } else {
-        None
     }
 }

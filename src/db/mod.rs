@@ -139,8 +139,8 @@ impl Db {
         &self,
         address: Address,
         chain_id: i32,
-        from_block: i32,
-        to_block: i32,
+        low: i32,
+        high: i32,
     ) -> Result<()> {
         use schema::backfill_jobs::dsl;
         let mut conn = self.pool.get().await?;
@@ -149,8 +149,8 @@ impl Db {
             .values((
                 dsl::addresses.eq(vec![address]),
                 dsl::chain_id.eq(chain_id),
-                dsl::from_block.eq(from_block),
-                dsl::to_block.eq(to_block),
+                dsl::low.eq(low),
+                dsl::high.eq(high),
             ))
             .on_conflict_do_nothing()
             .execute(&mut conn)
@@ -171,7 +171,7 @@ impl Db {
         let res = dsl::backfill_jobs
             .filter(dsl::chain_id.eq(self.chain_id))
             .select(BackfillJobWithId::as_select())
-            .order(dsl::from_block.desc())
+            .order(dsl::high.desc())
             .load(&mut conn)
             .await?;
 
@@ -190,7 +190,7 @@ impl Db {
                 let jobs = dsl::backfill_jobs
                     .filter(dsl::chain_id.eq(self.chain_id))
                     .select(BackfillJob::as_select())
-                    .order(dsl::from_block.desc())
+                    .order(dsl::high.desc())
                     .load(&mut conn)
                     .await?;
 
@@ -210,6 +210,19 @@ impl Db {
         .await?;
 
         Ok(())
+    }
+
+    /// Updates the to_block for a backfill job
+    pub async fn update_job(&self, id: i32, high: u64) -> Result<()> {
+        use schema::backfill_jobs::dsl;
+        let mut conn = self.pool.get().await?;
+
+        let res = update(dsl::backfill_jobs)
+            .filter(dsl::id.eq(id))
+            .set(dsl::high.eq(high as i32))
+            .execute(&mut conn)
+            .await;
+        handle_error(res).await
     }
 }
 

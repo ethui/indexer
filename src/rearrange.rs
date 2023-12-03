@@ -5,11 +5,8 @@ use crate::db::models::BackfillJob;
 /// Assumes jobs are already sorted by from_block
 pub fn rearrange(jobs: Vec<BackfillJob>, chain_id: i32) -> Vec<BackfillJob> {
     let points = jobs.iter().fold(BTreeSet::new(), |mut acc, j| {
-        acc.insert(j.from_block);
-        // adds one to represent this as a non-inclusive range,
-        // otherwise we lose info
-        // (e.g: the range 3..=3 disappears since we remove duplicates)
-        acc.insert(j.to_block + 1);
+        acc.insert(j.low);
+        acc.insert(j.high);
         acc
     });
 
@@ -25,32 +22,29 @@ pub fn rearrange(jobs: Vec<BackfillJob>, chain_id: i32) -> Vec<BackfillJob> {
         if start <= end {
             let mut addresses = Vec::new();
             for job in jobs.iter() {
-                if job.from_block > end {
+                if job.low > end {
                     break;
                 };
-                if job.from_block <= start && job.to_block >= end - 1 {
+
+                if job.low <= start && job.high >= end - 1 {
                     addresses.extend_from_slice(&job.addresses)
                 }
             }
 
             size += addresses.len();
-            // convert back to inclusive range, which is the representation used
-            // outside this algo
-            range_map.insert((start, end - 1), addresses);
+            range_map.insert((start, end), addresses);
         }
     }
 
     let mut res = Vec::with_capacity(size);
-    range_map
-        .into_iter()
-        .for_each(|((from_block, to_block), addresses)| {
-            res.push(BackfillJob {
-                addresses,
-                chain_id,
-                from_block,
-                to_block,
-            })
-        });
+    range_map.into_iter().for_each(|((low, high), addresses)| {
+        res.push(BackfillJob {
+            addresses,
+            chain_id,
+            low,
+            high,
+        })
+    });
 
     res
 }
@@ -81,12 +75,12 @@ mod tests {
     fn ranges_to_jobs(ranges: Vec<(u8, i32, i32)>) -> Vec<BackfillJob> {
         ranges
             .into_iter()
-            .map(|(addr, from_block, to_block)| {
+            .map(|(addr, low, high)| {
                 let slice = &[addr; 20];
                 let address = Address::from_slice(slice).into();
                 BackfillJob {
-                    from_block,
-                    to_block,
+                    low,
+                    high,
                     addresses: vec![address],
                     chain_id: 1,
                 }
@@ -99,7 +93,7 @@ mod tests {
         while let Some(job) = result.pop() {
             if let Some(ref mut e) = expected
                 .iter_mut()
-                .find(|e| job.from_block == e.1 && job.to_block == e.2)
+                .find(|e| job.low == e.1 && job.high == e.2)
             {
                 assert_eq!(job.addresses.len(), e.0.len());
                 e.0.iter()
