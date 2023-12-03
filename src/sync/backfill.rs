@@ -120,8 +120,6 @@ impl SyncJob for Worker<Backfill> {
             self.maybe_flush(block).await?;
         }
 
-        // TODO: flush needs to properly update the job
-        // this needs to be part of BackfillJob, not just Inner
         self.flush(self.inner.low).await?;
 
         info!("closing backfill worker");
