@@ -1,6 +1,6 @@
 use std::collections::{BTreeSet, HashMap};
 
-use super::models::BackfillJob;
+use crate::db::models::BackfillJob;
 
 /// Assumes jobs are already sorted by from_block
 pub fn rearrange(jobs: Vec<BackfillJob>, chain_id: i32) -> Vec<BackfillJob> {

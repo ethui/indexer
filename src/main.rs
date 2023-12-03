@@ -2,6 +2,7 @@ mod api;
 mod config;
 mod db;
 mod provider;
+mod rearrange;
 mod sync;
 
 use color_eyre::eyre::Result;
