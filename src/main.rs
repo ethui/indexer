@@ -21,18 +21,19 @@ async fn main() -> Result<()> {
 
     let config = Config::read()?;
 
+    // set up a few random things
     let (account_tx, account_rx) = mpsc::unbounded_channel();
     let (job_tx, job_rx) = mpsc::unbounded_channel();
     let db = Db::connect(&config, account_tx, job_tx).await?;
     let chain = db.setup_chain(&config.chain).await?;
+    let token = CancellationToken::new();
 
     // setup each task
-    let token = CancellationToken::new();
     let sync = Forward::new(db.clone(), &config, chain, account_rx, token.clone()).await?;
     let backfill = BackfillManager::new(db.clone(), &config, job_rx, token.clone());
     let api = config.http.map(|c| api::start(db.clone(), c));
 
-    // spawn and track all tasks
+    // spawn and tasks and track them
     let tracker = TaskTracker::new();
     tracker.spawn(sync.run());
     tracker.spawn(backfill.run());
