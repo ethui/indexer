@@ -48,6 +48,7 @@ pub struct Chain {
 pub struct BackfillJob {
     pub addresses: Vec<Address>,
     pub chain_id: i32,
+
     /// The low (oldest) block number
     pub low: i32,
 
