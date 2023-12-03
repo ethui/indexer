@@ -11,6 +11,7 @@ diesel::table! {
 
 diesel::table! {
     backfill_jobs (chain_id, from_block, to_block) {
+        id -> Int4,
         addresses -> Array<Bytea>,
         chain_id -> Int4,
         from_block -> Int4,

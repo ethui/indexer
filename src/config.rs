@@ -41,6 +41,9 @@ pub struct SyncConfig {
 
     #[serde(default = "default_buffer_size")]
     pub buffer_size: usize,
+
+    #[serde(default = "default_backfill_concurrency")]
+    pub backfill_concurrency: usize,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -82,4 +85,8 @@ fn default_http_port() -> u16 {
 
 fn default_buffer_size() -> usize {
     1000
+}
+
+fn default_backfill_concurrency() -> usize {
+    10
 }

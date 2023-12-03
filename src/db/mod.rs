@@ -15,27 +15,41 @@ use tokio::sync::mpsc::UnboundedSender;
 use tracing::instrument;
 
 use crate::config::{ChainConfig, Config};
-use crate::db::models::BackfillJob;
-use crate::events::Event;
+use crate::db::models::{BackfillJob, BackfillJobWithId};
 
 use self::models::{Chain, CreateTx};
 use self::types::Address;
 
 #[derive(Clone)]
 pub struct Db {
+    /// async db pool
     pool: Pool<AsyncPgConnection>,
-    tx: UnboundedSender<Event>,
+
+    /// notify sync job of new accounts
+    new_accounts_tx: UnboundedSender<alloy_primitives::Address>,
+
+    /// notify backfill job of new jobs
+    /// (which are created from new accounts, but asynchronously, so need their own event)
+    /// payload is empty because the job only needs a notification to rearrange from DB data
+    new_job_tx: UnboundedSender<()>,
+
+    /// chain ID we're running on
     chain_id: i32,
 }
 
 impl Db {
-    pub async fn connect(config: &Config, tx: UnboundedSender<Event>) -> Result<Self> {
+    pub async fn connect(
+        config: &Config,
+        new_accounts_tx: UnboundedSender<alloy_primitives::Address>,
+        new_job_tx: UnboundedSender<()>,
+    ) -> Result<Self> {
         let db_config =
             AsyncDieselConnectionManager::<AsyncPgConnection>::new(config.db.url.clone());
         let pool = Pool::builder(db_config).build()?;
         Ok(Self {
             pool,
-            tx,
+            new_accounts_tx,
+            new_job_tx,
             chain_id: config.chain.chain_id,
         })
     }
@@ -100,8 +114,7 @@ impl Db {
 
         // notify sync job if creation was successful
         if res.is_ok() {
-            self.tx
-                .send(Event::AccountRegistered { address: address.0 })?;
+            self.new_accounts_tx.send(address.0)?;
         }
 
         handle_error(res).await
@@ -143,16 +156,21 @@ impl Db {
             .execute(&mut conn)
             .await;
 
+        // notify backfill job new work is available
+        if res.is_ok() {
+            self.new_job_tx.send(())?;
+        }
+
         handle_error(res).await
     }
 
-    pub async fn get_backfill_jobs(&self) -> Result<Vec<BackfillJob>> {
+    pub async fn get_backfill_jobs(&self) -> Result<Vec<BackfillJobWithId>> {
         use schema::backfill_jobs::dsl;
         let mut conn = self.pool.get().await?;
 
         let res = dsl::backfill_jobs
             .filter(dsl::chain_id.eq(self.chain_id))
-            .select(BackfillJob::as_select())
+            .select(BackfillJobWithId::as_select())
             .order(dsl::from_block.desc())
             .load(&mut conn)
             .await?;
@@ -162,6 +180,7 @@ impl Db {
 
     /// Deletes all existing backfill jobs, and rearranges them for optimal I/O
     /// See `utils::rearrange` for more details
+    #[instrument(skip(self))]
     pub async fn rearrange_backfill_jobs(&self) -> Result<()> {
         use schema::backfill_jobs::dsl;
         let mut conn = self.pool.get().await?;
