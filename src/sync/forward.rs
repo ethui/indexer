@@ -1,12 +1,12 @@
 use alloy_primitives::Address;
 use async_trait::async_trait;
 use color_eyre::eyre::Result;
-use reth_provider::HeaderProvider;
 use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
 use tracing::instrument;
 
 use crate::{config::Config, db::Db};
 
+use super::provider::Provider;
 use super::{SyncJob, Worker};
 
 /// Main sync job
@@ -30,7 +30,7 @@ impl SyncJob for Worker<Forward> {
         loop {
             self.process_new_accounts().await?;
 
-            match self.provider.header_by_number(self.inner.next_block)? {
+            match self.provider.block_header(self.inner.next_block)? {
                 // got a block. process it, only flush if needed
                 Some(header) => {
                     self.process_block(&header).await?;
@@ -64,7 +64,6 @@ impl Worker<Forward> {
         self.db
             .create_backfill_job(
                 address.into(),
-                self.chain.chain_id,
                 self.chain.start_block,
                 self.inner.next_block as i32,
             )

@@ -3,12 +3,15 @@ use std::collections::{BTreeSet, HashMap};
 use crate::db::models::BackfillJob;
 
 /// Assumes jobs are already sorted by from_block
-pub fn rearrange(jobs: Vec<BackfillJob>, chain_id: i32) -> Vec<BackfillJob> {
-    let points = jobs.iter().fold(BTreeSet::new(), |mut acc, j| {
-        acc.insert(j.low);
-        acc.insert(j.high);
-        acc
-    });
+pub fn rearrange(jobs: &[BackfillJob]) -> Vec<BackfillJob> {
+    let points = jobs
+        .iter()
+        .filter(|j| j.low == j.high) // filter out empty jobs
+        .fold(BTreeSet::new(), |mut acc, j| {
+            acc.insert(j.low);
+            acc.insert(j.high);
+            acc
+        });
 
     let sorted_points: Vec<i32> = points.into_iter().collect();
 
@@ -40,7 +43,6 @@ pub fn rearrange(jobs: Vec<BackfillJob>, chain_id: i32) -> Vec<BackfillJob> {
     range_map.into_iter().for_each(|((low, high), addresses)| {
         res.push(BackfillJob {
             addresses,
-            chain_id,
             low,
             high,
         })
@@ -59,15 +61,14 @@ mod tests {
     type Expectation = (Vec<u8>, i32, i32);
 
     #[rstest]
+    #[case(vec![(0x1, 1, 1)], vec![])]
     #[case(vec![(0x1, 1, 2), (0x2, 1, 3)], vec![(vec![0x1, 0x2], 1, 2), (vec![0x2], 3, 3)])]
     #[case(vec![(0x1, 1, 10), (0x2, 5, 15)], vec![(vec![0x1], 1, 4), (vec![0x1, 0x2], 5, 10), (vec![0x2], 11, 15)])]
     #[case(vec![(0x1, 1, 1), (0x2, 2, 2), (0x3, 3, 3)], vec![(vec![0x1], 1, 1), (vec![0x2], 2, 2), (vec![0x3], 3, 3)])]
     #[case(vec![(0x1, 10, 20), (0x2, 15, 25), (0x3, 20, 30)], vec![(vec![0x1], 10, 14), (vec![0x1, 0x2], 15, 19), (vec![0x1, 0x2, 0x3], 20, 20), (vec![0x2, 0x3], 21, 25), (vec![0x3], 26, 30)])]
     fn test(#[case] ranges: Vec<Mock>, #[case] expected: Vec<Expectation>) {
         let ranges = ranges_to_jobs(ranges);
-        dbg!(&ranges);
-        let result = rearrange(ranges, 1);
-        dbg!(&result);
+        let result = rearrange(&ranges);
 
         compare(result, expected);
     }
@@ -82,7 +83,6 @@ mod tests {
                     low,
                     high,
                     addresses: vec![address],
-                    chain_id: 1,
                 }
             })
             .collect()

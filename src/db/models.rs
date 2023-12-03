@@ -43,11 +43,10 @@ pub struct Chain {
     pub updated_at: chrono::NaiveDateTime,
 }
 
-#[derive(Debug, Queryable, Selectable, Insertable)]
+#[derive(Debug, Queryable, Selectable, Insertable, Clone)]
 #[diesel(table_name = backfill_jobs, check_for_backend(Pg))]
 pub struct BackfillJob {
     pub addresses: Vec<Address>,
-    pub chain_id: i32,
 
     /// The low (oldest) block number
     pub low: i32,
@@ -56,12 +55,11 @@ pub struct BackfillJob {
     pub high: i32,
 }
 
-#[derive(Debug, Queryable, Selectable, Insertable)]
+#[derive(Debug, Queryable, Selectable, Insertable, Clone)]
 #[diesel(table_name = backfill_jobs, check_for_backend(Pg))]
 pub struct BackfillJobWithId {
     pub id: i32,
     pub addresses: Vec<Address>,
-    pub chain_id: i32,
 
     /// The low (oldest) block number
     pub low: i32,

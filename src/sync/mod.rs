@@ -1,5 +1,6 @@
 mod backfill;
 mod forward;
+mod provider;
 mod utils;
 
 use std::{
@@ -11,15 +12,7 @@ use alloy_primitives::{Address, B256};
 use async_trait::async_trait;
 use color_eyre::eyre::Result;
 use rand::{rngs::StdRng, SeedableRng};
-use reth_db::{
-    mdbx::{tx::Tx, RO},
-    DatabaseEnv,
-};
 use reth_primitives::Header;
-use reth_provider::{
-    BlockNumReader, BlockReader, DatabaseProvider, ProviderFactory, ReceiptProvider,
-    TransactionsProvider,
-};
 use scalable_cuckoo_filter::{DefaultHasher, ScalableCuckooFilter, ScalableCuckooFilterBuilder};
 use tokio::time::sleep;
 use tracing::trace;
@@ -30,15 +23,16 @@ use crate::{
         models::{Chain, CreateTx},
         Db,
     },
-    provider::provider_factory,
 };
 
 pub use backfill::BackfillManager;
 pub use forward::Forward;
+pub use provider::{Provider, RethDBProvider};
 
 /// Generic sync job state
 pub struct Worker<T> {
     inner: T,
+    provider: RethDBProvider,
 
     /// DB handle
     db: Db,
@@ -57,12 +51,6 @@ pub struct Worker<T> {
 
     /// Desired buffer capacity, and threshold at which to flush it
     buffer_capacity: usize,
-
-    /// Reth Provider factory
-    factory: ProviderFactory<DatabaseEnv>,
-
-    /// Current Reth DB provider
-    provider: DatabaseProvider<Tx<RO>>,
 }
 
 /// A match between an address and a transaction
@@ -80,8 +68,7 @@ pub trait SyncJob {
 
 impl<T> Worker<T> {
     async fn new(inner: T, db: Db, config: &Config, chain: Chain) -> Result<Self> {
-        let factory = provider_factory(chain.chain_id as u64, &config.reth)?;
-        let provider: reth_provider::DatabaseProvider<Tx<RO>> = factory.provider()?;
+        let provider = RethDBProvider::new(config, &chain)?;
 
         let mut cuckoo = ScalableCuckooFilterBuilder::new()
             .initial_capacity(1000)
@@ -98,7 +85,6 @@ impl<T> Worker<T> {
             chain,
             addresses: config.sync.seed_addresses.clone(),
             cuckoo,
-            factory,
             provider,
             buffer: Vec::with_capacity(config.sync.buffer_size),
             buffer_capacity: config.sync.buffer_size,
@@ -120,12 +106,11 @@ impl<T> Worker<T> {
     async fn wait_new_block(&mut self, block: u64) -> Result<()> {
         trace!(event = "wait", block);
         loop {
-            let provider = self.factory.provider()?;
-            let latest = provider.last_block_number().unwrap();
+            self.provider.reload()?;
+            let latest = self.provider.last_block_number().unwrap();
 
             if latest >= block {
                 trace!("new block(s) found. from: {}, latest: {}", block, latest);
-                self.provider = provider;
                 return Ok(());
             }
 
@@ -134,18 +119,13 @@ impl<T> Worker<T> {
     }
 
     async fn process_block(&mut self, header: &Header) -> Result<()> {
-        let indices = match self.provider.block_body_indices(header.number)? {
-            Some(indices) => indices,
-            None => return Ok(()),
-        };
-
-        for tx_id in indices.first_tx_num..indices.first_tx_num + indices.tx_count {
-            let tx = match self.provider.transaction_by_id_no_hash(tx_id)? {
+        for tx_id in self.provider.block_tx_id_ranges(header.number)? {
+            let tx = match self.provider.tx_by_id(tx_id)? {
                 Some(tx) => tx,
                 None => continue,
             };
 
-            let receipt = match self.provider.receipt(tx_id)? {
+            let receipt = match self.provider.receipt_by_id(tx_id)? {
                 Some(receipt) => receipt,
                 None => continue,
             };

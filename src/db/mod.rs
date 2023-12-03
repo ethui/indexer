@@ -1,25 +1,31 @@
 pub mod models;
 mod schema;
-mod types;
+pub mod types;
 
 use color_eyre::Result;
+use tokio::sync::mpsc::UnboundedSender;
+
 use diesel::{delete, insert_into, prelude::*, update};
 use diesel_async::{
     pooled_connection::{deadpool::Pool, AsyncDieselConnectionManager},
     scoped_futures::ScopedFutureExt,
     AsyncConnection, AsyncPgConnection, RunQueryDsl,
 };
-use tokio::sync::mpsc::UnboundedSender;
 use tracing::instrument;
 
-use crate::config::{ChainConfig, Config};
-use crate::db::models::{BackfillJob, BackfillJobWithId};
+use crate::{
+    config::{ChainConfig, Config},
+    db::models::{BackfillJob, BackfillJobWithId},
+};
 
 use self::{
     models::{Chain, CreateTx},
     types::Address,
 };
 
+/// An abstract DB connection
+/// In production, `PgBackend` is meant to be used, but the trait allows for the existance of
+/// `InMemoryBackend` as well, which is useful for testing
 #[derive(Clone)]
 pub struct Db {
     /// async db pool
@@ -122,10 +128,10 @@ impl Db {
 
     #[instrument(skip(self, txs), fields(txs = txs.len()))]
     pub async fn create_txs(&self, txs: Vec<CreateTx>) -> Result<()> {
-        use schema::txs::dsl::*;
+        use schema::txs::dsl;
         let mut conn = self.pool.get().await?;
 
-        let res = insert_into(txs)
+        let res = insert_into(dsl::txs)
             .values(&txs)
             .on_conflict_do_nothing()
             .execute(&mut conn)
@@ -135,20 +141,14 @@ impl Db {
     }
 
     #[instrument(skip(self))]
-    pub async fn create_backfill_job(
-        &self,
-        address: Address,
-        chain_id: i32,
-        low: i32,
-        high: i32,
-    ) -> Result<()> {
+    pub async fn create_backfill_job(&self, address: Address, low: i32, high: i32) -> Result<()> {
         use schema::backfill_jobs::dsl;
         let mut conn = self.pool.get().await?;
 
         let res = insert_into(dsl::backfill_jobs)
             .values((
                 dsl::addresses.eq(vec![address]),
-                dsl::chain_id.eq(chain_id),
+                dsl::chain_id.eq(self.chain_id),
                 dsl::low.eq(low),
                 dsl::high.eq(high),
             ))
@@ -194,7 +194,7 @@ impl Db {
                     .load(&mut conn)
                     .await?;
 
-                let rearranged = crate::rearrange::rearrange(jobs, self.chain_id);
+                let rearranged = crate::rearrange::rearrange(&jobs);
 
                 delete(dsl::backfill_jobs).execute(&mut conn).await?;
 
@@ -226,7 +226,7 @@ impl Db {
     }
 }
 
-pub async fn handle_error(res: diesel::QueryResult<usize>) -> Result<()> {
+async fn handle_error(res: diesel::QueryResult<usize>) -> Result<()> {
     match res {
         Ok(_) => Ok(()),
         Err(diesel::result::Error::DatabaseError(

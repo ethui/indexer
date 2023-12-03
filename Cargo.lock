@@ -2387,6 +2387,7 @@ dependencies = [
  "diesel",
  "diesel-async",
  "futures",
+ "lazy_static",
  "rand 0.8.5",
  "reth-db",
  "reth-primitives",

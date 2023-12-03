@@ -46,4 +46,5 @@ scalable_cuckoo_filter = "0.2.3"
 rand = { version = "0.8.5", default-features = false, features = ["std_rng"] }
 
 [dev-dependencies]
+lazy_static = "1.4.0"
 rstest = "0.18.2"

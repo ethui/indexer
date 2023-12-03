@@ -1,20 +1,21 @@
-use std::sync::Arc;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use color_eyre::eyre::Result;
-use reth_provider::HeaderProvider;
 use tokio::select;
-use tokio::sync::mpsc::UnboundedReceiver;
-use tokio::sync::{broadcast, RwLock, Semaphore};
-use tokio::task::JoinHandle;
-use tokio::time::sleep;
+use tokio::{
+    sync::{broadcast, mpsc::UnboundedReceiver, RwLock, Semaphore},
+    task::JoinHandle,
+    time::sleep,
+};
 use tracing::instrument;
 
-use crate::config::Config;
-use crate::db::models::BackfillJobWithId;
-use crate::db::Db;
+use crate::{
+    config::Config,
+    db::{models::BackfillJobWithId, Db},
+};
 
+use super::provider::Provider;
 use super::{SyncJob, Worker};
 
 /// Backfill job
@@ -78,11 +79,12 @@ impl BackfillManager {
             // wait for a new job, or a preset delay, whichever comes first
             let timeout = sleep(Duration::from_secs(10 * 60));
             select! {
-                _ = timeout => {}
-                _ = self.jobs_rcv.recv() => {}
+                _ = timeout => {dbg!("timeout");}
+                Some(_) = self.jobs_rcv.recv() => {dbg!("rcv");}
             }
 
             // shutdown, time to re-org and reprioritize
+            dbg!("sending");
             shutdown.send(())?;
             for worker in workers {
                 worker.await.unwrap().unwrap();
@@ -97,7 +99,6 @@ pub struct Backfill {
     low: u64,
     shutdown: broadcast::Receiver<()>,
 }
-
 #[async_trait]
 impl SyncJob for Worker<Backfill> {
     #[instrument(skip(self), fields(chain_id = self.chain.chain_id))]
@@ -108,7 +109,7 @@ impl SyncJob for Worker<Backfill> {
                 break;
             }
 
-            let header = self.provider.header_by_number(block)?.unwrap();
+            let header = self.provider.block_header(block)?.unwrap();
             self.process_block(&header).await?;
             self.maybe_flush(block).await?;
         }
