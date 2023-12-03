@@ -15,20 +15,20 @@ use crate::config::Config;
 use crate::db::models::BackfillJobWithId;
 use crate::db::Db;
 
-use super::{SyncInner, SyncJob};
+use super::{SyncJob, Worker};
 
 /// Backfill job
 /// Walks the blockchain backwards, within a fixed range
 /// Processes a list of addresses determined by the rearrangment logic defined in
 /// `crate::db::rearrange_backfill`
-pub struct BackfillSync {
+pub struct BackfillManager {
     db: Db,
     concurrency: usize,
     jobs_rcv: UnboundedReceiver<()>,
     config: Arc<RwLock<Config>>,
 }
 
-impl BackfillSync {
+impl BackfillManager {
     pub async fn start(
         db: Db,
         config: &Config,
@@ -67,7 +67,9 @@ impl BackfillSync {
                         if shutdown.try_recv().is_ok() {
                             return Ok(());
                         }
-                        let worker = Worker::new(db, config, job, shutdown).await.unwrap();
+                        let worker = Backfill::new_worker(db, config, job, shutdown)
+                            .await
+                            .unwrap();
                         worker.run().await
                     })
                 })
@@ -89,50 +91,50 @@ impl BackfillSync {
     }
 }
 
-pub struct Worker {
-    inner: SyncInner,
+pub struct Backfill {
     from: u64,
     to: u64,
     shutdown: broadcast::Receiver<()>,
 }
 
 #[async_trait]
-impl SyncJob for Worker {
-    #[instrument(skip(self), fields(chain_id = self.inner.chain.chain_id))]
+impl SyncJob for Worker<Backfill> {
+    #[instrument(skip(self), fields(chain_id = self.chain.chain_id))]
     async fn run(mut self) -> Result<()> {
-        for block in (self.from..=self.to).rev() {
+        for block in (self.inner.from..=self.inner.to).rev() {
             // start by checking shutdown signal
-            if self.shutdown.try_recv().is_ok() {
+            if self.inner.shutdown.try_recv().is_ok() {
                 break;
             }
 
-            self.inner.next_block = block;
-            let header = self.inner.provider.header_by_number(block)?.unwrap();
-            self.inner.process_block(&header).await?;
-            self.inner.maybe_flush().await?;
+            self.next_block = block;
+            let header = self.provider.header_by_number(block)?.unwrap();
+            self.process_block(&header).await?;
+            self.maybe_flush().await?;
         }
 
         // TODO: flush needs to properly update the job
         // this needs to be part of BackfillJob, not just Inner
-        self.inner.flush().await?;
+        self.flush().await?;
 
         Ok(())
     }
 }
 
-impl Worker {
-    async fn new(
+impl Backfill {
+    async fn new_worker(
         db: Db,
         config: Arc<RwLock<Config>>,
         job: BackfillJobWithId,
         shutdown: broadcast::Receiver<()>,
-    ) -> Result<Self> {
+    ) -> Result<Worker<Self>> {
         let config = config.read().await;
-        Ok(Self {
+        let s = Self {
             from: job.to_block as u64,
             to: job.from_block as u64,
             shutdown,
-            inner: SyncInner::new(db, &config).await?,
-        })
+        };
+
+        Worker::new(s, db, &config).await
     }
 }

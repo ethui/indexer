@@ -18,7 +18,7 @@ pub fn rearrange(jobs: Vec<BackfillJob>, chain_id: i32) -> Vec<BackfillJob> {
     let mut range_map = HashMap::new();
     let mut size = 0;
 
-    for i in 0..sorted_points.len() - 1 {
+    for i in 0..sorted_points.len().saturating_sub(1) {
         let start = sorted_points[i];
         let end = sorted_points[i + 1];
 

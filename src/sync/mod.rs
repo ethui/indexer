@@ -1,5 +1,5 @@
 mod backfill;
-mod main;
+mod forward;
 
 use std::{
     collections::{BTreeSet, HashSet},
@@ -32,11 +32,13 @@ use crate::{
     provider::provider_factory,
 };
 
-pub use backfill::BackfillSync;
-pub use main::MainSync;
+pub use backfill::BackfillManager;
+pub use forward::Forward;
 
 /// Generic sync job state
-pub struct SyncInner {
+pub struct Worker<T> {
+    inner: T,
+
     /// DB handle
     db: Db,
 
@@ -78,8 +80,8 @@ pub trait SyncJob {
     async fn run(mut self) -> Result<()>;
 }
 
-impl SyncInner {
-    async fn new(db: Db, config: &Config) -> Result<Self> {
+impl<T> Worker<T> {
+    async fn new(inner: T, db: Db, config: &Config) -> Result<Self> {
         let chain = db.setup_chain(&config.chain).await?;
         let factory = provider_factory(chain.chain_id as u64, &config.reth)?;
         let provider: reth_provider::DatabaseProvider<Tx<RO>> = factory.provider()?;
@@ -94,6 +96,7 @@ impl SyncInner {
         });
 
         Ok(Self {
+            inner,
             db,
             next_block: chain.last_known_block as u64 + 1,
             chain,
