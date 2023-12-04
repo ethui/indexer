@@ -2,6 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use color_eyre::eyre::Result;
+use reth_provider::HeaderProvider;
 use tokio::select;
 use tokio::{
     sync::{mpsc::UnboundedReceiver, RwLock, Semaphore},
@@ -15,8 +16,7 @@ use crate::{
     db::{models::BackfillJobWithId, Db},
 };
 
-use super::provider::Provider;
-use super::{SyncJob, Worker};
+use super::{RethProvider, SyncJob, Worker};
 
 #[derive(Debug)]
 pub enum StopStrategy {
@@ -43,18 +43,21 @@ pub struct BackfillManager {
     jobs_rcv: UnboundedReceiver<()>,
     config: Arc<RwLock<Config>>,
     stop: StopStrategy,
+    provider_factory: Arc<RwLock<RethProvider>>,
 }
 
 impl BackfillManager {
     pub fn new(
         db: Db,
         config: &Config,
+        provider_factory: Arc<RwLock<RethProvider>>,
         jobs_rcv: UnboundedReceiver<()>,
         stop: StopStrategy,
     ) -> Self {
         Self {
             db,
             jobs_rcv,
+            provider_factory,
             config: Arc::new(RwLock::new(config.clone())),
             concurrency: config.sync.backfill_concurrency,
             stop,
@@ -66,11 +69,9 @@ impl BackfillManager {
         loop {
             let semaphore = Arc::new(Semaphore::new(self.concurrency));
             let inner_cancel = CancellationToken::new();
-            dbg!(self.concurrency);
 
             self.db.reorg_backfill_jobs().await?;
             let jobs = self.db.get_backfill_jobs().await?;
-            dbg!(jobs.len());
 
             if self.stop.is_on_finish() && jobs.is_empty() {
                 break;
@@ -80,6 +81,7 @@ impl BackfillManager {
                 .into_iter()
                 .map(|job| {
                     let db = self.db.clone();
+                    let factory = self.provider_factory.clone();
                     let semaphore = semaphore.clone();
                     let config = self.config.clone();
                     let token = inner_cancel.clone();
@@ -88,7 +90,9 @@ impl BackfillManager {
                         if token.is_cancelled() {
                             return Ok(());
                         }
-                        let worker = Backfill::new_worker(db, config, job, token).await.unwrap();
+                        let worker = Backfill::new_worker(db, config, job, factory, token)
+                            .await
+                            .unwrap();
                         worker.run().await
                     })
                 })
@@ -144,7 +148,7 @@ impl SyncJob for Worker<Backfill> {
                 break;
             }
 
-            let header = self.provider.block_header(block)?.unwrap();
+            let header = self.provider.header_by_number(block)?.unwrap();
             self.process_block(&header).await?;
             self.maybe_flush(block).await?;
         }
@@ -183,6 +187,7 @@ impl Backfill {
         db: Db,
         config: Arc<RwLock<Config>>,
         job: BackfillJobWithId,
+        provider_factory: Arc<RwLock<RethProvider>>,
         cancellation_token: CancellationToken,
     ) -> Result<Worker<Self>> {
         let config = config.read().await;
@@ -194,6 +199,6 @@ impl Backfill {
             low: job.low as u64,
         };
 
-        Worker::new(s, db, &config, chain, cancellation_token).await
+        Worker::new(s, db, &config, chain, provider_factory, cancellation_token).await
     }
 }
