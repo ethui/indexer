@@ -12,6 +12,8 @@ use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter};
 
 use config::Config;
 
+use crate::sync::{Provider, RethFactory, StopStrategy};
+
 use self::db::Db;
 use self::sync::{BackfillManager, Forward, SyncJob};
 
@@ -28,9 +30,19 @@ async fn main() -> Result<()> {
     let chain = db.setup_chain(&config.chain).await?;
     let token = CancellationToken::new();
 
+    let provider = RethFactory::new(&config, &chain);
+    // let provider2 = RethDBProvider::new(&config, &chain);
+    dbg!(provider);
+    return Ok(());
+
     // setup each task
     let sync = Forward::new(db.clone(), &config, chain, account_rx, token.clone()).await?;
-    let backfill = BackfillManager::new(db.clone(), &config, job_rx, token.clone());
+    let backfill = BackfillManager::new(
+        db.clone(),
+        &config,
+        job_rx,
+        StopStrategy::Token(token.clone()),
+    );
     let api = config.http.map(|c| api::start(db.clone(), c));
 
     // spawn and tasks and track them

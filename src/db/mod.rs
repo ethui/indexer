@@ -14,6 +14,7 @@ use diesel_async::{
 };
 use tracing::instrument;
 
+use crate::db::models::BackfillJobWithChainId;
 use crate::{
     config::{ChainConfig, Config},
     db::models::{BackfillJob, BackfillJobWithId},
@@ -214,7 +215,7 @@ impl Db {
     /// Deletes all existing backfill jobs, and rearranges them for optimal I/O
     /// See `utils::rearrange` for more details
     #[instrument(skip(self))]
-    pub async fn rorg_backfill_jobs(&self) -> Result<()> {
+    pub async fn reorg_backfill_jobs(&self) -> Result<()> {
         use schema::backfill_jobs::dsl;
         let mut conn = self.pool.get().await?;
 
@@ -230,6 +231,16 @@ impl Db {
                 let rearranged = crate::rearrange::rearrange(&jobs);
 
                 delete(dsl::backfill_jobs).execute(&mut conn).await?;
+
+                let rearranged: Vec<_> = rearranged
+                    .into_iter()
+                    .map(|j| BackfillJobWithChainId {
+                        addresses: j.addresses,
+                        chain_id: self.chain_id,
+                        low: j.low,
+                        high: j.high,
+                    })
+                    .collect();
 
                 insert_into(dsl::backfill_jobs)
                     .values(&rearranged)
@@ -267,5 +278,13 @@ async fn handle_error(res: diesel::QueryResult<usize>) -> Result<()> {
             _,
         )) => Ok(()),
         Err(e) => Err(e)?,
+    }
+}
+
+impl std::fmt::Debug for Db {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Db")
+            .field("chain_id", &self.chain_id)
+            .finish()
     }
 }

@@ -18,6 +18,21 @@ use crate::{
 use super::provider::Provider;
 use super::{SyncJob, Worker};
 
+#[derive(Debug)]
+pub enum StopStrategy {
+    Token(CancellationToken),
+    OnFinish,
+}
+
+impl StopStrategy {
+    fn is_on_finish(&self) -> bool {
+        match self {
+            StopStrategy::Token(_) => true,
+            _ => false,
+        }
+    }
+}
+
 /// Backfill job
 /// Walks the blockchain backwards, within a fixed range
 /// Processes a list of addresses determined by the rearrangment logic defined in
@@ -27,10 +42,7 @@ pub struct BackfillManager {
     concurrency: usize,
     jobs_rcv: UnboundedReceiver<()>,
     config: Arc<RwLock<Config>>,
-    cancellation_token: CancellationToken,
-
-    #[cfg(feature = "bench")]
-    close_when_empty: bool,
+    stop: StopStrategy,
 }
 
 impl BackfillManager {
@@ -38,37 +50,29 @@ impl BackfillManager {
         db: Db,
         config: &Config,
         jobs_rcv: UnboundedReceiver<()>,
-        cancellation_token: CancellationToken,
+        stop: StopStrategy,
     ) -> Self {
         Self {
             db,
             jobs_rcv,
             config: Arc::new(RwLock::new(config.clone())),
             concurrency: config.sync.backfill_concurrency,
-            cancellation_token,
-
-            #[cfg(feature = "bench")]
-            close_when_empty: false,
+            stop,
         }
     }
 
-    #[cfg(feature = "bench")]
-    pub fn close_when_empty(&mut self) {
-        self.close_when_empty = true;
-    }
-
-    #[instrument(name = "backfill", skip(self))]
+    #[instrument(name = "backfill", skip(self), fields(concurrency = self.concurrency))]
     pub async fn run(mut self) -> Result<()> {
         loop {
             let semaphore = Arc::new(Semaphore::new(self.concurrency));
             let inner_cancel = CancellationToken::new();
+            dbg!(self.concurrency);
 
-            self.db.rorg_backfill_jobs().await?;
+            self.db.reorg_backfill_jobs().await?;
             let jobs = self.db.get_backfill_jobs().await?;
-            dbg!(&jobs);
+            dbg!(jobs.len());
 
-            #[cfg(feature = "bench")]
-            if self.close_when_empty && jobs.is_empty() {
+            if self.stop.is_on_finish() && jobs.is_empty() {
                 break;
             }
 
@@ -91,35 +95,45 @@ impl BackfillManager {
                 .collect::<Vec<_>>();
 
             // wait for a new job, or a preset delay, whichever comes first
-            let timeout = sleep(Duration::from_secs(10 * 60));
-            select! {
-                _ = self.cancellation_token.cancelled() => {}
-                _ = timeout => {}
-                Some(_) = self.jobs_rcv.recv() => {}
-            }
+            match &self.stop {
+                // stop when cancellation token signals
+                // wait for new jobs too, which should be a sign to reorg
+                // request each job to stop
+                StopStrategy::Token(token) => {
+                    let timeout = sleep(Duration::from_secs(10 * 60));
+                    select! {
+                        _ = token.cancelled() => {}
+                        _ = timeout => {}
+                        Some(_) = self.jobs_rcv.recv() => {}
+                    }
+                    inner_cancel.cancel();
+                    for worker in workers {
+                        worker.await.unwrap().unwrap();
+                    }
+                    info!("closing backfill manager");
+                }
 
-            // shutdown, time to re-org and reprioritize
-            inner_cancel.cancel();
-            for worker in workers {
-                worker.await.unwrap().unwrap();
-            }
-            if self.cancellation_token.is_cancelled() {
-                break;
-            } else {
-                info!("rotating backfill workers");
+                // if we stop on finish, no need to do anything here
+                StopStrategy::OnFinish => {
+                    for worker in workers {
+                        worker.await.unwrap().unwrap();
+                    }
+                    break;
+                }
             }
         }
 
-        info!("closing backfill manager");
         Ok(())
     }
 }
 
+#[derive(Debug)]
 pub struct Backfill {
     job_id: i32,
     high: u64,
     low: u64,
 }
+
 #[async_trait]
 impl SyncJob for Worker<Backfill> {
     #[instrument(skip(self), fields(chain_id = self.chain.chain_id))]

@@ -39,10 +39,10 @@ chrono = { version = "0.4.31", features = ["serde"], default-features = false }
 bigdecimal = { version = "0.4.2", default-features = false }
 
 # reth
-reth-db = { git = "https://github.com/paradigmxyz/reth", package = "reth-db", tag = "v0.1.0-alpha.12" }
-reth-primitives = { git = "https://github.com/paradigmxyz/reth", package = "reth-primitives", tag = "v0.1.0-alpha.12" }
-reth_provider = { git = "https://github.com/paradigmxyz/reth", package = "reth-provider", tag = "v0.1.0-alpha.12" }
-reth-rpc-types = { git = "https://github.com/paradigmxyz/reth", tag = "v0.1.0-alpha.12" }
+reth-db = { path = "/home/naps62/contrib/paradigmxyz/reth/crates/storage/db" }
+reth-primitives = { path = "/home/naps62/contrib/paradigmxyz/reth/crates/primitives" }
+reth_provider = { path = "/home/naps62/contrib/paradigmxyz/reth/crates/storage/provider", package = "reth-provider" }
+reth-rpc-types = { path = "/home/naps62/contrib/paradigmxyz/reth/crates/rpc/rpc-types" }
 alloy-primitives = { version = "0.5.0", features = ["serde"] }
 
 # cuckoo
@@ -59,6 +59,3 @@ rstest = "0.18.2"
 [[bench]]
 name = "usdc_holders_backfill"
 harness = false
-
-[features]
-bench = []

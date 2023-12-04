@@ -17,6 +17,7 @@ use super::{SyncJob, Worker};
 ///
 /// Receives events for newly registered addresses, at which point they are added to the search set
 /// and a backfill job is scheduled
+#[derive(Debug)]
 pub struct Forward {
     /// Receiver for account registration events
     accounts_rcv: UnboundedReceiver<Address>,

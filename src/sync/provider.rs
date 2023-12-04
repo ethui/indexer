@@ -14,7 +14,8 @@ use crate::{config::Config, db::models::Chain};
 /// Wraps a provider to access Reth DB
 /// While the indexer is heavily coupled to this particular provider,
 /// it still benefits from abstracting it so it can be swapped out for testing purposes
-pub struct RethDBProvider {
+#[derive(Debug)]
+pub struct RethFactory {
     /// Reth Provider factory
     factory: ProviderFactory<DatabaseEnv>,
 
@@ -46,7 +47,7 @@ pub trait Provider: Sized + Send {
     fn receipt_by_id(&self, tx_id: u64) -> Result<Option<Receipt>>;
 }
 
-impl Provider for RethDBProvider {
+impl Provider for RethFactory {
     /// Creates a new Reth DB provider
     fn new(config: &Config, chain: &Chain) -> Result<Self> {
         let chain_id = chain.chain_id as u64;
@@ -61,7 +62,15 @@ impl Provider for RethDBProvider {
 
         let factory: ProviderFactory<reth_db::DatabaseEnv> = ProviderFactory::new(db, spec);
 
-        let provider: reth_provider::DatabaseProvider<Tx<RO>> = factory.provider()?;
+        let provider: reth_provider::DatabaseProvider<Tx<RO>> =
+            factory.provider().unwrap_or_else(|e| panic!("{:?}", e));
+        let provider2: reth_provider::DatabaseProvider<Tx<RO>> =
+            factory.provider().unwrap_or_else(|e| panic!("{:?}", e));
+        let provider3: reth_provider::DatabaseProvider<Tx<RO>> =
+            factory.provider().unwrap_or_else(|e| panic!("{:?}", e));
+        let provider4: reth_provider::DatabaseProvider<Tx<RO>> =
+            factory.provider().unwrap_or_else(|e| panic!("{:?}", e));
+        dbg!(provider3);
         Ok(Self { factory, provider })
     }
 

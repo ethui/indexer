@@ -4,7 +4,6 @@ use crate::db::models::BackfillJob;
 
 /// Assumes jobs are already sorted by from_block
 pub fn rearrange(jobs: &[BackfillJob]) -> Vec<BackfillJob> {
-    dbg!(&jobs);
     let points = jobs
         .iter()
         .filter(|j| j.low != j.high) // filter out empty jobs
@@ -16,8 +15,6 @@ pub fn rearrange(jobs: &[BackfillJob]) -> Vec<BackfillJob> {
 
     let sorted_points: Vec<i32> = points.into_iter().collect();
 
-    dbg!(&sorted_points);
-
     let mut range_map = HashMap::new();
     let mut size = 0;
 
@@ -26,26 +23,15 @@ pub fn rearrange(jobs: &[BackfillJob]) -> Vec<BackfillJob> {
         let end = sorted_points[i + 1];
         let range = start..end;
 
-        println!();
-        println!();
-        println!();
-        println!("{:?}", start..end);
         let mut addresses = Vec::new();
         for job in jobs.iter() {
-            println!("{:?}", job.addresses[0]);
             if job.low >= end {
-                println!("break");
-                break;
+                continue;
             };
 
             let job_range = job.low..job.high;
 
             if job_range.contains(&range.start) && job_range.contains(&(range.end - 1)) {
-                // }
-                // println!("{:?}", job.low..job.high);
-                //
-                // if dbg!(range.contains(&job.low)) && dbg!(range.contains(&(job.high - 1))) {
-                println!("include");
                 addresses.extend_from_slice(&job.addresses)
             }
         }
@@ -54,10 +40,8 @@ pub fn rearrange(jobs: &[BackfillJob]) -> Vec<BackfillJob> {
         if !addresses.is_empty() {
             range_map.insert((start, end), addresses);
         }
-        println!();
     }
 
-    dbg!(&range_map);
     let mut res = Vec::with_capacity(size);
     range_map.into_iter().for_each(|((low, high), addresses)| {
         res.push(BackfillJob {
@@ -66,7 +50,6 @@ pub fn rearrange(jobs: &[BackfillJob]) -> Vec<BackfillJob> {
             high,
         })
     });
-    dbg!(&res);
 
     res
 }
@@ -188,7 +171,6 @@ mod tests {
         let mut result = rearrange(&jobs);
         result.sort_by(|j, j2| j.low.cmp(&j2.low));
 
-        dbg!(&result);
         assert_eq!(result.len(), fixture.output.len());
 
         for (job, expectation) in result.into_iter().zip(fixture.output.iter()) {

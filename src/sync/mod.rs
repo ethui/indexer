@@ -26,12 +26,13 @@ use crate::{
     },
 };
 
-pub use backfill::BackfillManager;
+pub use backfill::{BackfillManager, StopStrategy};
 pub use forward::Forward;
 pub use provider::{Provider, RethDBProvider};
 
 /// Generic sync job state
-pub struct Worker<T> {
+#[derive(Debug)]
+pub struct Worker<T: std::fmt::Debug> {
     inner: T,
     provider: RethDBProvider,
 
@@ -70,7 +71,7 @@ pub trait SyncJob {
     async fn run(mut self) -> Result<()>;
 }
 
-impl<T> Worker<T> {
+impl<T: std::fmt::Debug> Worker<T> {
     async fn new(
         inner: T,
         db: Db,
