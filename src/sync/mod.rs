@@ -28,7 +28,7 @@ use crate::{
 
 pub use backfill::BackfillManager;
 pub use forward::Forward;
-pub use provider::{Provider, RethDBProvider};
+pub use provider::RethDBProvider;
 
 /// Generic sync job state
 pub struct Worker<T> {

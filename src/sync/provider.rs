@@ -22,33 +22,9 @@ pub struct RethDBProvider {
     provider: DatabaseProvider<Tx<RO>>,
 }
 
-pub trait Provider: Sized + Send {
-    /// Creates a new provider
-    fn new(config: &Config, chain: &Chain) -> Result<Self>;
-
-    /// Reloads the provider
-    /// This is necessary when Reth receives a new block
-    fn reload(&mut self) -> Result<()>;
-
-    /// Returns the last block number
-    fn last_block_number(&self) -> Result<u64>;
-
-    /// Returns a block header by number
-    fn block_header(&self, number: u64) -> Result<Option<Header>>;
-
-    /// Returns the range of transaction IDs for a block
-    fn block_tx_id_ranges(&self, number: u64) -> Result<Range<u64>>;
-
-    /// Returns a transaction by ID
-    fn tx_by_id(&self, tx_id: u64) -> Result<Option<TransactionSignedNoHash>>;
-
-    /// Returns a receipt by ID
-    fn receipt_by_id(&self, tx_id: u64) -> Result<Option<Receipt>>;
-}
-
-impl Provider for RethDBProvider {
+impl RethDBProvider {
     /// Creates a new Reth DB provider
-    fn new(config: &Config, chain: &Chain) -> Result<Self> {
+    pub fn new(config: &Config, chain: &Chain) -> Result<Self> {
         let chain_id = chain.chain_id as u64;
         let config = &config.reth;
         let db = open_db_read_only(&config.db, None)?;
@@ -67,23 +43,23 @@ impl Provider for RethDBProvider {
 
     /// Reloads the provider
     /// This is necessary when Reth receives a new block
-    fn reload(&mut self) -> Result<()> {
+    pub fn reload(&mut self) -> Result<()> {
         self.provider = self.factory.provider()?;
         Ok(())
     }
 
     /// Returns the last block number
-    fn last_block_number(&self) -> Result<u64> {
+    pub fn last_block_number(&self) -> Result<u64> {
         Ok(self.provider.last_block_number()?)
     }
 
     /// Returns a block header by number
-    fn block_header(&self, number: u64) -> Result<Option<Header>> {
+    pub fn block_header(&self, number: u64) -> Result<Option<Header>> {
         Ok(self.provider.header_by_number(number)?)
     }
 
     /// Returns the range of transaction IDs for a block
-    fn block_tx_id_ranges(&self, number: u64) -> Result<Range<u64>> {
+    pub fn block_tx_id_ranges(&self, number: u64) -> Result<Range<u64>> {
         let indices = match self.provider.block_body_indices(number)? {
             Some(indices) => indices,
             None => return Ok(Default::default()),
@@ -93,12 +69,12 @@ impl Provider for RethDBProvider {
     }
 
     /// Returns a transaction by ID
-    fn tx_by_id(&self, tx_id: u64) -> Result<Option<TransactionSignedNoHash>> {
+    pub fn tx_by_id(&self, tx_id: u64) -> Result<Option<TransactionSignedNoHash>> {
         Ok(self.provider.transaction_by_id_no_hash(tx_id)?)
     }
 
     /// Returns a receipt by ID
-    fn receipt_by_id(&self, tx_id: u64) -> Result<Option<Receipt>> {
+    pub fn receipt_by_id(&self, tx_id: u64) -> Result<Option<Receipt>> {
         Ok(self.provider.receipt(tx_id)?)
     }
 }

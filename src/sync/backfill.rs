@@ -15,7 +15,6 @@ use crate::{
     db::{models::BackfillJobWithId, Db},
 };
 
-use super::provider::Provider;
 use super::{SyncJob, Worker};
 
 /// Backfill job

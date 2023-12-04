@@ -8,7 +8,6 @@ use tracing::{info, instrument};
 use crate::db::models::Chain;
 use crate::{config::Config, db::Db};
 
-use super::provider::Provider;
 use super::{SyncJob, Worker};
 
 /// Main sync job
