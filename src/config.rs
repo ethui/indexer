@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use color_eyre::eyre::Result;
@@ -58,9 +58,11 @@ impl Config {
     pub fn read() -> Result<Self> {
         let args = Args::parse();
 
-        Ok(toml::from_str(&std::fs::read_to_string(
-            args.config.as_path(),
-        )?)?)
+        Self::read_from(args.config.as_path())
+    }
+
+    pub fn read_from(path: &Path) -> Result<Self> {
+        Ok(toml::from_str(&std::fs::read_to_string(path)?)?)
     }
 }
 

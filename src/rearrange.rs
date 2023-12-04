@@ -4,6 +4,7 @@ use crate::db::models::BackfillJob;
 
 /// Assumes jobs are already sorted by from_block
 pub fn rearrange(jobs: &[BackfillJob]) -> Vec<BackfillJob> {
+    dbg!(&jobs);
     let points = jobs
         .iter()
         .filter(|j| j.low == j.high) // filter out empty jobs
@@ -47,6 +48,7 @@ pub fn rearrange(jobs: &[BackfillJob]) -> Vec<BackfillJob> {
             high,
         })
     });
+    dbg!(&res);
 
     res
 }
@@ -61,16 +63,19 @@ mod tests {
     type Expectation = (Vec<u8>, i32, i32);
 
     #[rstest]
-    #[case(vec![(0x1, 1, 1)], vec![])]
-    #[case(vec![(0x1, 1, 2), (0x2, 1, 3)], vec![(vec![0x1, 0x2], 1, 2), (vec![0x2], 3, 3)])]
-    #[case(vec![(0x1, 1, 10), (0x2, 5, 15)], vec![(vec![0x1], 1, 4), (vec![0x1, 0x2], 5, 10), (vec![0x2], 11, 15)])]
-    #[case(vec![(0x1, 1, 1), (0x2, 2, 2), (0x3, 3, 3)], vec![(vec![0x1], 1, 1), (vec![0x2], 2, 2), (vec![0x3], 3, 3)])]
-    #[case(vec![(0x1, 10, 20), (0x2, 15, 25), (0x3, 20, 30)], vec![(vec![0x1], 10, 14), (vec![0x1, 0x2], 15, 19), (vec![0x1, 0x2, 0x3], 20, 20), (vec![0x2, 0x3], 21, 25), (vec![0x3], 26, 30)])]
+    #[case(vec![(0x1, 0, 10), (0x1, 11, 20)], vec![(vec![0x1], 0, 20)])]
+    // #[case(vec![(0x1, 1, 1)], vec![])]
+    // #[case(vec![(0x1, 1, 2), (0x2, 1, 3)], vec![(vec![0x1, 0x2], 1, 2), (vec![0x2], 3, 3)])]
+    // #[case(vec![(0x1, 1, 10), (0x2, 5, 15)], vec![(vec![0x1], 1, 4), (vec![0x1, 0x2], 5, 10), (vec![0x2], 11, 15)])]
+    // #[case(vec![(0x1, 1, 1), (0x2, 2, 2), (0x3, 3, 3)], vec![(vec![0x1], 1, 1), (vec![0x2], 2, 2), (vec![0x3], 3, 3)])]
+    // #[case(vec![(0x1, 10, 20), (0x2, 15, 25), (0x3, 20, 30)], vec![(vec![0x1], 10, 14), (vec![0x1, 0x2], 15, 19), (vec![0x1, 0x2, 0x3], 20, 20), (vec![0x2, 0x3], 21, 25), (vec![0x3], 26, 30)])]
     fn test(#[case] ranges: Vec<Mock>, #[case] expected: Vec<Expectation>) {
         let ranges = ranges_to_jobs(ranges);
         let result = rearrange(&ranges);
 
-        compare(result, expected);
+        compare(result.clone(), expected);
+        dbg!(result);
+        assert_eq!(1, 2);
     }
 
     fn ranges_to_jobs(ranges: Vec<(u8, i32, i32)>) -> Vec<BackfillJob> {
@@ -99,6 +104,8 @@ mod tests {
                 e.0.iter()
                     .zip(job.addresses.iter())
                     .for_each(|(a, b)| assert_eq!(a, &b.0.as_slice()[0]));
+            } else {
+                panic!();
             }
         }
     }

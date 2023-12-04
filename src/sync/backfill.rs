@@ -28,6 +28,9 @@ pub struct BackfillManager {
     jobs_rcv: UnboundedReceiver<()>,
     config: Arc<RwLock<Config>>,
     cancellation_token: CancellationToken,
+
+    #[cfg(feature = "bench")]
+    close_when_empty: bool,
 }
 
 impl BackfillManager {
@@ -43,7 +46,15 @@ impl BackfillManager {
             config: Arc::new(RwLock::new(config.clone())),
             concurrency: config.sync.backfill_concurrency,
             cancellation_token,
+
+            #[cfg(feature = "bench")]
+            close_when_empty: false,
         }
+    }
+
+    #[cfg(feature = "bench")]
+    pub fn close_when_empty(&mut self) {
+        self.close_when_empty = true;
     }
 
     #[instrument(name = "backfill", skip(self))]
@@ -53,11 +64,15 @@ impl BackfillManager {
             let inner_cancel = CancellationToken::new();
 
             self.db.rorg_backfill_jobs().await?;
+            let jobs = self.db.get_backfill_jobs().await?;
+            dbg!(&jobs);
 
-            let workers = self
-                .db
-                .get_backfill_jobs()
-                .await?
+            #[cfg(feature = "bench")]
+            if self.close_when_empty && jobs.is_empty() {
+                break;
+            }
+
+            let workers = jobs
                 .into_iter()
                 .map(|job| {
                     let db = self.db.clone();

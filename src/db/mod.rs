@@ -24,7 +24,7 @@ use self::{
     types::Address,
 };
 
-const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 /// An abstract DB connection
 /// In production, `PgBackend` is meant to be used, but the trait allows for the existance of
