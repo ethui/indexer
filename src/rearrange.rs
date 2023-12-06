@@ -15,8 +15,6 @@ pub fn rearrange(jobs: &[BackfillJob]) -> Vec<BackfillJob> {
 
     let sorted_points: Vec<i32> = points.into_iter().collect();
 
-    dbg!(&sorted_points);
-
     let mut range_map = HashMap::new();
     let mut size = 0;
 
@@ -25,26 +23,15 @@ pub fn rearrange(jobs: &[BackfillJob]) -> Vec<BackfillJob> {
         let end = sorted_points[i + 1];
         let range = start..end;
 
-        println!();
-        println!();
-        println!();
-        println!("{:?}", start..end);
         let mut addresses = Vec::new();
         for job in jobs.iter() {
-            println!("{:?}", job.addresses[0]);
             if job.low >= end {
-                println!("break");
-                break;
+                continue;
             };
 
             let job_range = job.low..job.high;
 
             if job_range.contains(&range.start) && job_range.contains(&(range.end - 1)) {
-                // }
-                // println!("{:?}", job.low..job.high);
-                //
-                // if dbg!(range.contains(&job.low)) && dbg!(range.contains(&(job.high - 1))) {
-                println!("include");
                 addresses.extend_from_slice(&job.addresses)
             }
         }
@@ -53,10 +40,8 @@ pub fn rearrange(jobs: &[BackfillJob]) -> Vec<BackfillJob> {
         if !addresses.is_empty() {
             range_map.insert((start, end), addresses);
         }
-        println!();
     }
 
-    dbg!(&range_map);
     let mut res = Vec::with_capacity(size);
     range_map.into_iter().for_each(|((low, high), addresses)| {
         res.push(BackfillJob {
@@ -74,9 +59,6 @@ mod tests {
     use super::*;
     use alloy_primitives::Address;
     use rstest::*;
-
-    type Mock = (u8, i32, i32);
-    type Expectation = (Vec<u8>, i32, i32);
 
     #[derive(Debug, PartialEq)]
     struct FakeJob(Vec<u8>, i32, i32);
@@ -189,7 +171,6 @@ mod tests {
         let mut result = rearrange(&jobs);
         result.sort_by(|j, j2| j.low.cmp(&j2.low));
 
-        dbg!(&result);
         assert_eq!(result.len(), fixture.output.len());
 
         for (job, expectation) in result.into_iter().zip(fixture.output.iter()) {
@@ -224,20 +205,5 @@ mod tests {
                 }
             })
             .collect()
-    }
-
-    // compares the rearranged results with expectation
-    fn compare(mut result: Vec<BackfillJob>, mut expected: Vec<Expectation>) {
-        while let Some(job) = result.pop() {
-            if let Some(ref mut e) = expected
-                .iter_mut()
-                .find(|e| job.low == e.1 && job.high == e.2)
-            {
-                assert_eq!(job.addresses.len(), e.0.len());
-                e.0.iter()
-                    .zip(job.addresses.iter())
-                    .for_each(|(a, b)| assert_eq!(a, &b.0.as_slice()[0]));
-            }
-        }
     }
 }

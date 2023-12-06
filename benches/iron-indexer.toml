@@ -1,0 +1,13 @@
+[reth]
+db = "/mnt/data/eth/sepolia/reth/db"
+
+[chain]
+chain_id = 11155111
+start_block = 4800000
+
+[sync]
+buffer_size = 10000
+backfill_concurrency = 1000
+
+[db]
+url = "postgres://iron_indexer:iron-indexer&12345@localhost/iron_indexer_test"

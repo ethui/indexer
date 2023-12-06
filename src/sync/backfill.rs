@@ -2,6 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use color_eyre::eyre::Result;
+use reth_provider::HeaderProvider;
 use tokio::select;
 use tokio::{
     sync::{mpsc::UnboundedReceiver, RwLock, Semaphore},
@@ -15,7 +16,24 @@ use crate::{
     db::{models::BackfillJobWithId, Db},
 };
 
-use super::{SyncJob, Worker};
+use super::{RethProvider, SyncJob, Worker};
+
+#[derive(Debug)]
+pub enum StopStrategy {
+    /// This mode is used in production, taking a cancellation for graceful shutdowns
+    Token(CancellationToken),
+
+    /// This mode is only used in benchmarks, where we want to sync only a fixed set of blocks
+    /// instead of continuouslly waiting for new work
+    #[allow(dead_code)]
+    OnFinish,
+}
+
+impl StopStrategy {
+    fn is_on_finish(&self) -> bool {
+        matches!(self, StopStrategy::Token(_))
+    }
+}
 
 /// Backfill job
 /// Walks the blockchain backwards, within a fixed range
@@ -26,40 +44,46 @@ pub struct BackfillManager {
     concurrency: usize,
     jobs_rcv: UnboundedReceiver<()>,
     config: Arc<RwLock<Config>>,
-    cancellation_token: CancellationToken,
+    stop: StopStrategy,
+    provider_factory: Arc<RwLock<RethProvider>>,
 }
 
 impl BackfillManager {
     pub fn new(
         db: Db,
         config: &Config,
+        provider_factory: Arc<RwLock<RethProvider>>,
         jobs_rcv: UnboundedReceiver<()>,
-        cancellation_token: CancellationToken,
+        stop: StopStrategy,
     ) -> Self {
         Self {
             db,
             jobs_rcv,
+            provider_factory,
             config: Arc::new(RwLock::new(config.clone())),
             concurrency: config.sync.backfill_concurrency,
-            cancellation_token,
+            stop,
         }
     }
 
-    #[instrument(name = "backfill", skip(self))]
+    #[instrument(name = "backfill", skip(self), fields(concurrency = self.concurrency))]
     pub async fn run(mut self) -> Result<()> {
         loop {
             let semaphore = Arc::new(Semaphore::new(self.concurrency));
             let inner_cancel = CancellationToken::new();
 
-            self.db.rorg_backfill_jobs().await?;
+            self.db.reorg_backfill_jobs().await?;
+            let jobs = self.db.get_backfill_jobs().await?;
 
-            let workers = self
-                .db
-                .get_backfill_jobs()
-                .await?
+            if self.stop.is_on_finish() && jobs.is_empty() {
+                break;
+            }
+
+            let workers = jobs
                 .into_iter()
                 .map(|job| {
                     let db = self.db.clone();
+                    let factory = self.provider_factory.clone();
                     let semaphore = semaphore.clone();
                     let config = self.config.clone();
                     let token = inner_cancel.clone();
@@ -68,42 +92,54 @@ impl BackfillManager {
                         if token.is_cancelled() {
                             return Ok(());
                         }
-                        let worker = Backfill::new_worker(db, config, job, token).await.unwrap();
+                        let worker = Backfill::new_worker(db, config, job, factory, token)
+                            .await
+                            .unwrap();
                         worker.run().await
                     })
                 })
                 .collect::<Vec<_>>();
 
             // wait for a new job, or a preset delay, whichever comes first
-            let timeout = sleep(Duration::from_secs(10 * 60));
-            select! {
-                _ = self.cancellation_token.cancelled() => {}
-                _ = timeout => {}
-                Some(_) = self.jobs_rcv.recv() => {}
-            }
+            match &self.stop {
+                // stop when cancellation token signals
+                // wait for new jobs too, which should be a sign to reorg
+                // request each job to stop
+                StopStrategy::Token(token) => {
+                    let timeout = sleep(Duration::from_secs(10 * 60));
+                    select! {
+                        _ = token.cancelled() => {}
+                        _ = timeout => {}
+                        Some(_) = self.jobs_rcv.recv() => {}
+                    }
+                    inner_cancel.cancel();
+                    for worker in workers {
+                        worker.await.unwrap().unwrap();
+                    }
+                    info!("closing backfill manager");
+                }
 
-            // shutdown, time to re-org and reprioritize
-            inner_cancel.cancel();
-            for worker in workers {
-                worker.await.unwrap().unwrap();
-            }
-            if self.cancellation_token.is_cancelled() {
-                break;
-            } else {
-                info!("rotating backfill workers");
+                // if we stop on finish, no need to do anything here
+                StopStrategy::OnFinish => {
+                    for worker in workers {
+                        worker.await.unwrap().unwrap();
+                    }
+                    break;
+                }
             }
         }
 
-        info!("closing backfill manager");
         Ok(())
     }
 }
 
+#[derive(Debug)]
 pub struct Backfill {
     job_id: i32,
     high: u64,
     low: u64,
 }
+
 #[async_trait]
 impl SyncJob for Worker<Backfill> {
     #[instrument(skip(self), fields(chain_id = self.chain.chain_id))]
@@ -114,7 +150,7 @@ impl SyncJob for Worker<Backfill> {
                 break;
             }
 
-            let header = self.provider.block_header(block)?.unwrap();
+            let header = self.provider.header_by_number(block)?.unwrap();
             self.process_block(&header).await?;
             self.maybe_flush(block).await?;
         }
@@ -153,6 +189,7 @@ impl Backfill {
         db: Db,
         config: Arc<RwLock<Config>>,
         job: BackfillJobWithId,
+        provider_factory: Arc<RwLock<RethProvider>>,
         cancellation_token: CancellationToken,
     ) -> Result<Worker<Self>> {
         let config = config.read().await;
@@ -164,6 +201,6 @@ impl Backfill {
             low: job.low as u64,
         };
 
-        Worker::new(s, db, &config, chain, cancellation_token).await
+        Worker::new(s, db, &config, chain, provider_factory, cancellation_token).await
     }
 }

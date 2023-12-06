@@ -3,6 +3,7 @@ mod forward;
 mod provider;
 mod utils;
 
+use std::sync::Arc;
 use std::{
     collections::{BTreeSet, HashSet},
     time::Duration,
@@ -10,10 +11,16 @@ use std::{
 
 use alloy_primitives::{Address, B256};
 use async_trait::async_trait;
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{eyre, Result};
 use rand::{rngs::StdRng, SeedableRng};
+use reth_db::mdbx::tx::Tx;
+use reth_db::mdbx::RO;
 use reth_primitives::Header;
+use reth_provider::{
+    BlockNumReader, BlockReader, DatabaseProvider, ReceiptProvider, TransactionsProvider,
+};
 use scalable_cuckoo_filter::{DefaultHasher, ScalableCuckooFilter, ScalableCuckooFilterBuilder};
+use tokio::sync::RwLock;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::trace;
@@ -26,14 +33,17 @@ use crate::{
     },
 };
 
-pub use backfill::BackfillManager;
+pub use backfill::{BackfillManager, StopStrategy};
 pub use forward::Forward;
-pub use provider::RethDBProvider;
+pub use provider::RethProvider;
 
 /// Generic sync job state
-pub struct Worker<T> {
+#[derive(Debug)]
+pub struct Worker<T: std::fmt::Debug> {
     inner: T,
-    provider: RethDBProvider,
+
+    provider: DatabaseProvider<Tx<RO>>,
+    provider_factory: Arc<RwLock<RethProvider>>,
 
     /// DB handle
     db: Db,
@@ -70,15 +80,16 @@ pub trait SyncJob {
     async fn run(mut self) -> Result<()>;
 }
 
-impl<T> Worker<T> {
+impl<T: std::fmt::Debug> Worker<T> {
     async fn new(
         inner: T,
         db: Db,
         config: &Config,
         chain: Chain,
+        provider_factory: Arc<RwLock<RethProvider>>,
         cancellation_token: CancellationToken,
     ) -> Result<Self> {
-        let provider = RethDBProvider::new(config, &chain)?;
+        let provider = provider_factory.write().await.get()?;
 
         let addresses: BTreeSet<_> = db.get_addresses().await?.into_iter().map(|a| a.0).collect();
         let mut cuckoo = ScalableCuckooFilterBuilder::new()
@@ -92,11 +103,12 @@ impl<T> Worker<T> {
 
         Ok(Self {
             inner,
+            provider,
+            provider_factory,
             db,
             chain,
             addresses,
             cuckoo,
-            provider,
             buffer: Vec::with_capacity(config.sync.buffer_size),
             buffer_capacity: config.sync.buffer_size,
             cancellation_token,
@@ -118,7 +130,8 @@ impl<T> Worker<T> {
     async fn wait_new_block(&mut self, block: u64) -> Result<()> {
         trace!(event = "wait", block);
         loop {
-            self.provider.reload()?;
+            self.provider = self.provider_factory.read().await.get()?;
+
             let latest = self.provider.last_block_number().unwrap();
 
             if latest >= block {
@@ -131,13 +144,18 @@ impl<T> Worker<T> {
     }
 
     async fn process_block(&mut self, header: &Header) -> Result<()> {
-        for tx_id in self.provider.block_tx_id_ranges(header.number)? {
-            let tx = match self.provider.tx_by_id(tx_id)? {
+        let indices = match self.provider.block_body_indices(header.number)? {
+            Some(indices) => indices,
+            None => return Err(eyre!("err")),
+        };
+
+        for tx_id in indices.first_tx_num..indices.first_tx_num + indices.tx_count {
+            let tx = match self.provider.transaction_by_id_no_hash(tx_id)? {
                 Some(tx) => tx,
                 None => continue,
             };
 
-            let receipt = match self.provider.receipt_by_id(tx_id)? {
+            let receipt = match self.provider.receipt(tx_id)? {
                 Some(receipt) => receipt,
                 None => continue,
             };

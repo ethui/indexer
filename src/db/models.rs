@@ -55,6 +55,20 @@ pub struct BackfillJob {
     pub high: i32,
 }
 
+#[derive(Debug, Insertable, Clone)]
+#[diesel(table_name = backfill_jobs, check_for_backend(Pg))]
+pub struct BackfillJobWithChainId {
+    pub addresses: Vec<Address>,
+
+    pub chain_id: i32,
+
+    /// The low (oldest) block number
+    pub low: i32,
+
+    /// The high (newest) block number
+    pub high: i32,
+}
+
 #[derive(Debug, Queryable, Selectable, Insertable, Clone)]
 #[diesel(table_name = backfill_jobs, check_for_backend(Pg))]
 pub struct BackfillJobWithId {

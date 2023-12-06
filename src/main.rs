@@ -4,13 +4,18 @@ mod db;
 mod rearrange;
 mod sync;
 
+use std::sync::Arc;
+
 use color_eyre::eyre::Result;
+use tokio::sync::RwLock;
 use tokio::{signal, sync::mpsc};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::info;
 use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter};
 
 use config::Config;
+
+use crate::sync::{RethProvider, StopStrategy};
 
 use self::db::Db;
 use self::sync::{BackfillManager, Forward, SyncJob};
@@ -26,11 +31,26 @@ async fn main() -> Result<()> {
     let (job_tx, job_rx) = mpsc::unbounded_channel();
     let db = Db::connect(&config, account_tx, job_tx).await?;
     let chain = db.setup_chain(&config.chain).await?;
+    let provider_factory = Arc::new(RwLock::new(RethProvider::new(&config, &chain)?));
     let token = CancellationToken::new();
 
     // setup each task
-    let sync = Forward::new(db.clone(), &config, chain, account_rx, token.clone()).await?;
-    let backfill = BackfillManager::new(db.clone(), &config, job_rx, token.clone());
+    let sync = Forward::new(
+        db.clone(),
+        &config,
+        chain,
+        provider_factory.clone(),
+        account_rx,
+        token.clone(),
+    )
+    .await?;
+    let backfill = BackfillManager::new(
+        db.clone(),
+        &config,
+        provider_factory.clone(),
+        job_rx,
+        StopStrategy::Token(token.clone()),
+    );
     let api = config.http.map(|c| api::start(db.clone(), c));
 
     // spawn and tasks and track them

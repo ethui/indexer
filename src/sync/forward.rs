@@ -1,14 +1,18 @@
+use std::sync::Arc;
+
 use alloy_primitives::Address;
 use async_trait::async_trait;
 use color_eyre::eyre::Result;
+use reth_provider::HeaderProvider;
 use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, instrument};
 
 use crate::db::models::Chain;
 use crate::{config::Config, db::Db};
 
-use super::{SyncJob, Worker};
+use super::{RethProvider, SyncJob, Worker};
 
 /// Main sync job
 /// Walks the blockchain forward, from a pre-configured starting block.
@@ -16,6 +20,7 @@ use super::{SyncJob, Worker};
 ///
 /// Receives events for newly registered addresses, at which point they are added to the search set
 /// and a backfill job is scheduled
+#[derive(Debug)]
 pub struct Forward {
     /// Receiver for account registration events
     accounts_rcv: UnboundedReceiver<Address>,
@@ -35,7 +40,7 @@ impl SyncJob for Worker<Forward> {
 
             self.process_new_accounts().await?;
 
-            match self.provider.block_header(self.inner.next_block)? {
+            match self.provider.header_by_number(self.inner.next_block)? {
                 // got a block. process it, only flush if needed
                 Some(header) => {
                     self.process_block(&header).await?;
@@ -107,6 +112,7 @@ impl Forward {
         db: Db,
         config: &Config,
         chain: Chain,
+        provider_factory: Arc<RwLock<RethProvider>>,
         accounts_rcv: UnboundedReceiver<Address>,
         cancellation_token: CancellationToken,
     ) -> Result<Worker<Self>> {
@@ -118,6 +124,7 @@ impl Forward {
             db,
             config,
             chain,
+            provider_factory,
             cancellation_token,
         )
         .await
