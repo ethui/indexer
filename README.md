@@ -3,6 +3,7 @@
 [reth-indexer]: https://github.com/joshstevens19/reth-indexer
 [iron]: https://iron-wallet.xyz
 [miguel]: https://twitter.com/naps62
+[cuckoo]: https://en.wikipedia.org/wiki/Cuckoo_filter
 
 A parallel Reth indexer.
 It reads transaction history from [reth][reth]'s DB (direct from filesystem, skipping network & JSON-RPC overhead). It's able to index from a dynamic set of addresses, which can grow at runtime, by spawning parallel self-optimizing backfill jobs.
@@ -65,6 +66,10 @@ Instead of starting right away, we run a reorganization step:
 | **Backfill #4** | `[carol]`      | `[6, 15]`       | ...And carol's unique range in another |
 
 This ensures we are never attempting to fetch the same block twice, therefore optimizing IO as much as possible.
+
+### Cuckoo filters
+
+We make use of [Cuckoo filters][cuckoo] for efficiently filtering data inclusion. This is similar to how Bloom filters work, with additional benefits such as ability to remove items, and lower space overhead. The particular [implementation being used](https://docs.rs/scalable_cuckoo_filter/0.2.3/scalable_cuckoo_filter/index.html) also supports automatic scaling.
 
 ## Future Work
 
