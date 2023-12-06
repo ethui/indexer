@@ -20,16 +20,18 @@ use super::{RethProvider, SyncJob, Worker};
 
 #[derive(Debug)]
 pub enum StopStrategy {
+    /// This mode is used in production, taking a cancellation for graceful shutdowns
     Token(CancellationToken),
+
+    /// This mode is only used in benchmarks, where we want to sync only a fixed set of blocks
+    /// instead of continuouslly waiting for new work
+    #[allow(dead_code)]
     OnFinish,
 }
 
 impl StopStrategy {
     fn is_on_finish(&self) -> bool {
-        match self {
-            StopStrategy::Token(_) => true,
-            _ => false,
-        }
+        matches!(self, StopStrategy::Token(_))
     }
 }
 
@@ -150,7 +152,7 @@ impl SyncJob for Worker<Backfill> {
 
             let header = self.provider.header_by_number(block)?.unwrap();
             self.process_block(&header).await?;
-            // self.maybe_flush(block).await?;
+            self.maybe_flush(block).await?;
         }
 
         self.flush(self.inner.low).await?;
