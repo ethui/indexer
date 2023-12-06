@@ -150,7 +150,7 @@ impl SyncJob for Worker<Backfill> {
 
             let header = self.provider.header_by_number(block)?.unwrap();
             self.process_block(&header).await?;
-            self.maybe_flush(block).await?;
+            // self.maybe_flush(block).await?;
         }
 
         self.flush(self.inner.low).await?;

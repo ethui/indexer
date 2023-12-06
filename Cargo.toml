@@ -59,5 +59,9 @@ lazy_static = "1.4.0"
 rstest = "0.18.2"
 
 [[bench]]
+name = "provider_concurrency"
+harness = false
+
+[[bench]]
 name = "usdc_holders_backfill"
 harness = false

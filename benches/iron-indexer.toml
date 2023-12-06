@@ -6,7 +6,7 @@ chain_id = 11155111
 start_block = 4800000
 
 [sync]
-buffer_size = 1000
+buffer_size = 10000
 backfill_concurrency = 1000
 
 [db]
