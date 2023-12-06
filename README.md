@@ -37,7 +37,7 @@ Instead, `iron-indexer` takes a different approach: new addresses can be added t
 
 Let's illustrate this with an example: Say we're currently indexing only `alice`'s address. A regular syncing process is running, waiting for new blocks to process.
 
-After block 10, `bob`'s address is added to the set. From block 11 onwards, both `alice` and `bob` will be matched. But we missed blocks 1 through 10 for `bob`. At this point we register a new backill job for bob's address within that range.
+After block 10, `bob`'s address is added to the set. From block 11 onwards, both `alice` and `bob` will be matched. But we missed blocks 1 through 10 for `bob`. At this point we register a new backill job for the missing data.
 
 We're now at this state:
 
@@ -46,9 +46,9 @@ We're now at this state:
 | **Forward**     | `[alice, bob]` | waiting for #11 |
 | **Backfill #1** | `[bob]`        | `[1, 10]`       |
 
-The new backfill job starts running immediately, in reverse order.
+The new job starts immediately, in reverse order.
 
-A few moments later, `carols`'s address joins too. By now both existing jobs have advanced a bit, so with the new job we may end up with something like this:
+A few moments later, `carol`'s address joins too. By now both existing jobs have advanced a bit:
 
 | job             | account set    | block range     | notes                                     |
 | --------------- | -------------- | --------------- | ----------------------------------------- |
@@ -56,8 +56,8 @@ A few moments later, `carols`'s address joins too. By now both existing jobs hav
 | **Backfill #1** | `[bob]`        | `[1, 5]`        | We've synced from 10 to 6 in the meantime |
 | **Backfill #2** | `[carol]`      | `[1, 15]`       |                                           |
 
-At this point, the naive approach would be to run all 3 jobs concurrently.
-This has one drawback thought: both backfill jobs will fetch redundant blocks, 1 through 5.
+The naive approach would be to the new job and run all 3 concurrently.
+This has one drawback thought: both backfill jobs will fetch redundant blocks (1 through 5).
 
 Instead of starting right away, we run a reorganization step:
 
