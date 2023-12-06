@@ -41,7 +41,6 @@ We're now at this state:
 | job             | account set    | block range     |
 | --------------- | -------------- | --------------- |
 | **Forward**     | `[alice, bob]` | waiting for #11 |
-| ---             | ---            | ----            |
 | **Backfill #1** | `[bob]`        | `[1, 10]`       |
 
 The new backfill job starts running immediately, in reverse order.
@@ -51,7 +50,6 @@ A few moments later, `carols`'s address joins too. By now both existing jobs hav
 | job             | account set    | block range     | notes                                     |
 | --------------- | -------------- | --------------- | ----------------------------------------- |
 | **Forward**     | `[alice, bob]` | waiting for #16 |                                           |
-| ---             | ---            | ----            |                                           |
 | **Backfill #1** | `[bob]`        | `[1, 5]`        | We've synced from 10 to 6 in the meantime |
 | **Backfill #2** | `[carol]`      | `[1, 15]`       |                                           |
 
@@ -63,7 +61,6 @@ Instead of starting right away, we run a reorganization step:
 | job             | account set    | block range     | notes                                  |
 | --------------- | -------------- | --------------- | -------------------------------------- |
 | **Forward**     | `[alice, bob]` | waiting for #16 |                                        |
-| ---             | ---            | ----            |                                        |
 | **Backfill #3** | `[bob,carol]`  | `[1, 5]`        | The overlapping range in one job...    |
 | **Backfill #4** | `[carol]`      | `[6, 15]`       | ...And carol's unique range in another |
 
