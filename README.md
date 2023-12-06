@@ -7,7 +7,8 @@
 [cuckoo]: https://en.wikipedia.org/wiki/Cuckoo_filter
 
 A parallel Reth indexer.
-It reads transaction history from [reth][reth]'s DB (direct from filesystem, skipping network & JSON-RPC overhead). It's able to index from a dynamic set of addresses, which can grow at runtime, by spawning parallel self-optimizing backfill jobs.
+
+Reads transaction history from [reth][reth]'s DB (direct from filesystem, skipping network & JSON-RPC overhead). It's able to index from a dynamic set of addresses, which can grow at runtime, by spawning parallel self-optimizing backfill jobs.
 
 Note: Credit to [reth-indexer][reth-indexer], which was the original implementation that served as a basis for this.
 
