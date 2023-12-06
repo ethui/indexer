@@ -59,7 +59,7 @@ A few moments later, `carol`'s address joins too. By now both existing jobs have
 The naive approach would be to the new job and run all 3 concurrently.
 This has one drawback thought: both backfill jobs will fetch redundant blocks (1 through 5).
 
-Instead of starting right away, we run a reorganization step:
+Instead of starting right away, we run a [reorganization step](https://github.com/iron-wallet/indexer/blob/main/src/rearrange.rs):
 
 | job             | account set    | block range     | notes                                  |
 | --------------- | -------------- | --------------- | -------------------------------------- |
