@@ -1,5 +1,6 @@
 # Iron Indexer
 
+[reth]: https://paradigmxyz.github.io/reth/intro.html
 [reth-indexer]: https://github.com/joshstevens19/reth-indexer
 [iron]: https://iron-wallet.xyz
 [miguel]: https://twitter.com/naps62
