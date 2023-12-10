@@ -7,6 +7,10 @@ use tower_http::cors::CorsLayer;
 use tracing::instrument;
 
 use crate::{config::HttpConfig, db::Db};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 
 use self::routes::router;
 
