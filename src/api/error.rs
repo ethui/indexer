@@ -1,3 +1,4 @@
+use crate::api::auth::jwt::AuthError;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 
@@ -5,16 +6,17 @@ use axum::response::{IntoResponse, Response};
 pub enum Error {
     #[error(transparent)]
     Generic(#[from] color_eyre::Report),
+    #[error(transparent)]
+    Auth(#[from] AuthError),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
 
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
-        let (status_code, message) = match self {
-            Self::Generic(e) => (StatusCode::UNPROCESSABLE_ENTITY, e.to_string()),
-        };
-
-        (status_code, message).into_response()
+        match self {
+            Self::Generic(e) => (StatusCode::UNPROCESSABLE_ENTITY, e.to_string()).into_response(),
+            Self::Auth(e) => e.into_response(),
+        }
     }
 }

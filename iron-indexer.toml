@@ -10,6 +10,7 @@ buffer_size = 1000
 
 [http]
 port = 8080
+jwt_secret = "secret" # CHANGE THIS
 
 [db]
 url = "postgres://iron_indexer:iron-indexer&12345@localhost/iron_indexer"
