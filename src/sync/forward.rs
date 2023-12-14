@@ -5,7 +5,6 @@ use async_trait::async_trait;
 use color_eyre::eyre::Result;
 use reth_provider::HeaderProvider;
 use tokio::sync::mpsc::UnboundedReceiver;
-use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, instrument};
 
@@ -112,7 +111,7 @@ impl Forward {
         db: Db,
         config: &Config,
         chain: Chain,
-        provider_factory: Arc<RwLock<RethProvider>>,
+        provider_factory: Arc<RethProvider>,
         accounts_rcv: UnboundedReceiver<Address>,
         cancellation_token: CancellationToken,
     ) -> Result<Worker<Self>> {

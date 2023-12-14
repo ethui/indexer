@@ -45,14 +45,14 @@ pub struct BackfillManager {
     jobs_rcv: UnboundedReceiver<()>,
     config: Arc<RwLock<Config>>,
     stop: StopStrategy,
-    provider_factory: Arc<RwLock<RethProvider>>,
+    provider_factory: Arc<RethProvider>,
 }
 
 impl BackfillManager {
     pub fn new(
         db: Db,
         config: &Config,
-        provider_factory: Arc<RwLock<RethProvider>>,
+        provider_factory: Arc<RethProvider>,
         jobs_rcv: UnboundedReceiver<()>,
         stop: StopStrategy,
     ) -> Self {
@@ -189,7 +189,7 @@ impl Backfill {
         db: Db,
         config: Arc<RwLock<Config>>,
         job: BackfillJobWithId,
-        provider_factory: Arc<RwLock<RethProvider>>,
+        provider_factory: Arc<RethProvider>,
         cancellation_token: CancellationToken,
     ) -> Result<Worker<Self>> {
         let config = config.read().await;
