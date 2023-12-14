@@ -20,7 +20,6 @@ use reth_provider::{
     BlockNumReader, BlockReader, DatabaseProvider, ReceiptProvider, TransactionsProvider,
 };
 use scalable_cuckoo_filter::{DefaultHasher, ScalableCuckooFilter, ScalableCuckooFilterBuilder};
-use tokio::sync::RwLock;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::trace;
@@ -43,7 +42,7 @@ pub struct Worker<T: std::fmt::Debug> {
     inner: T,
 
     provider: DatabaseProvider<Tx<RO>>,
-    provider_factory: Arc<RwLock<RethProvider>>,
+    provider_factory: Arc<RethProvider>,
 
     /// DB handle
     db: Db,
@@ -86,10 +85,10 @@ impl<T: std::fmt::Debug> Worker<T> {
         db: Db,
         config: &Config,
         chain: Chain,
-        provider_factory: Arc<RwLock<RethProvider>>,
+        provider_factory: Arc<RethProvider>,
         cancellation_token: CancellationToken,
     ) -> Result<Self> {
-        let provider = provider_factory.write().await.get()?;
+        let provider = provider_factory.get()?;
 
         let addresses: BTreeSet<_> = db.get_addresses().await?.into_iter().map(|a| a.0).collect();
         let mut cuckoo = ScalableCuckooFilterBuilder::new()
@@ -130,7 +129,7 @@ impl<T: std::fmt::Debug> Worker<T> {
     async fn wait_new_block(&mut self, block: u64) -> Result<()> {
         trace!(event = "wait", block);
         loop {
-            self.provider = self.provider_factory.read().await.get()?;
+            self.provider = self.provider_factory.get()?;
 
             let latest = self.provider.last_block_number().unwrap();
 
