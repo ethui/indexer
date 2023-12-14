@@ -13,12 +13,8 @@ use alloy_primitives::{Address, B256};
 use async_trait::async_trait;
 use color_eyre::eyre::{eyre, Result};
 use rand::{rngs::StdRng, SeedableRng};
-use reth_db::mdbx::tx::Tx;
-use reth_db::mdbx::RO;
 use reth_primitives::Header;
-use reth_provider::{
-    BlockNumReader, BlockReader, DatabaseProvider, ReceiptProvider, TransactionsProvider,
-};
+use reth_provider::{BlockNumReader, BlockReader, ReceiptProvider, TransactionsProvider};
 use scalable_cuckoo_filter::{DefaultHasher, ScalableCuckooFilter, ScalableCuckooFilterBuilder};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
@@ -34,15 +30,14 @@ use crate::{
 
 pub use backfill::{BackfillManager, StopStrategy};
 pub use forward::Forward;
-pub use provider::RethProvider;
+pub use provider::RethProviderFactory;
 
 /// Generic sync job state
 #[derive(Debug)]
 pub struct Worker<T: std::fmt::Debug> {
     inner: T,
 
-    provider: DatabaseProvider<Tx<RO>>,
-    provider_factory: Arc<RethProvider>,
+    provider_factory: Arc<RethProviderFactory>,
 
     /// DB handle
     db: Db,
@@ -85,11 +80,9 @@ impl<T: std::fmt::Debug> Worker<T> {
         db: Db,
         config: &Config,
         chain: Chain,
-        provider_factory: Arc<RethProvider>,
+        provider_factory: Arc<RethProviderFactory>,
         cancellation_token: CancellationToken,
     ) -> Result<Self> {
-        let provider = provider_factory.get()?;
-
         let addresses: BTreeSet<_> = db.get_addresses().await?.into_iter().map(|a| a.0).collect();
         let mut cuckoo = ScalableCuckooFilterBuilder::new()
             .initial_capacity(addresses.len())
@@ -102,7 +95,6 @@ impl<T: std::fmt::Debug> Worker<T> {
 
         Ok(Self {
             inner,
-            provider,
             provider_factory,
             db,
             chain,
@@ -129,32 +121,35 @@ impl<T: std::fmt::Debug> Worker<T> {
     async fn wait_new_block(&mut self, block: u64) -> Result<()> {
         trace!(event = "wait", block);
         loop {
-            self.provider = self.provider_factory.get()?;
+            let provider = self.provider_factory.get()?;
 
-            let latest = self.provider.last_block_number().unwrap();
+            let latest = provider.last_block_number().unwrap();
 
             if latest >= block {
                 trace!("new block(s) found. from: {}, latest: {}", block, latest);
                 return Ok(());
             }
 
+            drop(provider);
+
             sleep(Duration::from_secs(2)).await;
         }
     }
 
     async fn process_block(&mut self, header: &Header) -> Result<()> {
-        let indices = match self.provider.block_body_indices(header.number)? {
+        let provider = self.provider_factory.get()?;
+        let indices = match provider.block_body_indices(header.number)? {
             Some(indices) => indices,
             None => return Err(eyre!("err")),
         };
 
         for tx_id in indices.first_tx_num..indices.first_tx_num + indices.tx_count {
-            let tx = match self.provider.transaction_by_id_no_hash(tx_id)? {
+            let tx = match provider.transaction_by_id_no_hash(tx_id)? {
                 Some(tx) => tx,
                 None => continue,
             };
 
-            let receipt = match self.provider.receipt(tx_id)? {
+            let receipt = match provider.receipt(tx_id)? {
                 Some(receipt) => receipt,
                 None => continue,
             };

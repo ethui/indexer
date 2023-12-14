@@ -10,12 +10,12 @@ use crate::{config::Config, db::models::Chain};
 /// While the indexer is heavily coupled to this particular provider,
 /// it still benefits from abstracting it so it can be swapped out for testing purposes
 #[derive(Debug)]
-pub struct RethProvider {
+pub struct RethProviderFactory {
     /// Reth Provider factory
     factory: ProviderFactory<DatabaseEnv>,
 }
 
-impl RethProvider {
+impl RethProviderFactory {
     /// Creates a new Reth DB provider
     pub fn new(config: &Config, chain: &Chain) -> Result<Self> {
         let chain_id = chain.chain_id as u64;
