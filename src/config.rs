@@ -47,6 +47,7 @@ pub struct SyncConfig {
 pub struct HttpConfig {
     #[serde(default = "default_http_port")]
     pub port: u16,
+    pub jwt_secret: String,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -70,6 +71,7 @@ impl Default for HttpConfig {
     fn default() -> Self {
         Self {
             port: default_http_port(),
+            jwt_secret: "".to_owned(),
         }
     }
 }

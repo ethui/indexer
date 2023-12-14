@@ -21,7 +21,7 @@ async fn health() -> impl IntoResponse {}
 
 #[derive(Debug, Deserialize)]
 struct Register {
-    pub address: alloy_primitives::Address,
+    address: alloy_primitives::Address,
 }
 
 async fn register(
