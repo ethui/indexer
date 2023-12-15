@@ -1,3 +1,6 @@
+#![cfg(test)]
+#![allow(dead_code)]
+
 use std::{env, path::PathBuf};
 
 use color_eyre::{eyre::eyre, Result};
