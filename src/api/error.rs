@@ -1,4 +1,5 @@
-use actix_web::ResponseError;
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -8,8 +9,12 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-impl ResponseError for Error {
-    fn status_code(&self) -> actix_web::http::StatusCode {
-        actix_web::http::StatusCode::UNPROCESSABLE_ENTITY
+impl IntoResponse for Error {
+    fn into_response(self) -> Response {
+        let (status_code, message) = match self {
+            Self::Generic(e) => (StatusCode::UNPROCESSABLE_ENTITY, e.to_string()),
+        };
+
+        (status_code, message).into_response()
     }
 }
