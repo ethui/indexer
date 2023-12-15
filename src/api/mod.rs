@@ -1,32 +1,23 @@
 mod error;
 mod routes;
 
-use actix_cors::Cors;
-use actix_web::{web, App, HttpServer};
+use std::net::SocketAddr;
 use tokio::task::JoinHandle;
+use tower_http::cors::CorsLayer;
 use tracing::instrument;
-use tracing_actix_web::TracingLogger;
 
 use crate::{config::HttpConfig, db::Db};
 
+use self::routes::router;
+
+#[allow(clippy::async_yields_async)]
 #[instrument(name = "api", skip(db, config), fields(port = config.port))]
-pub fn start(db: Db, config: HttpConfig) -> JoinHandle<std::result::Result<(), std::io::Error>> {
-    let server = HttpServer::new(move || {
-        let cors = Cors::default()
-            .allow_any_origin()
-            .allow_any_method()
-            .allow_any_header()
-            .max_age(3600);
+pub async fn start(db: Db, config: HttpConfig) -> JoinHandle<Result<(), std::io::Error>> {
+    tokio::spawn(async move {
+        let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
+        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
-        App::new()
-            .wrap(cors)
-            .wrap(TracingLogger::default())
-            .service(routes::health)
-            .service(routes::register)
-            .app_data(web::Data::new(db.clone()))
+        let app = router().layer(CorsLayer::permissive()).with_state(db);
+        axum::serve(listener, app).await
     })
-    .bind(("0.0.0.0", config.port))
-    .unwrap();
-
-    tokio::spawn(server.run())
 }

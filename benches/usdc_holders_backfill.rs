@@ -15,7 +15,7 @@ use iron_indexer::{
     db::{types::Address, Db},
     sync::{BackfillManager, StopStrategy},
 };
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::mpsc;
 
 use self::utils::one_time_setup;
 
@@ -56,7 +56,7 @@ async fn run(config: Config) -> Result<()> {
     let db = Db::connect(&config, account_tx, job_tx).await?;
     let chain = db.setup_chain(&config.chain).await?;
 
-    let provider_factory = Arc::new(RwLock::new(RethProviderFactory::new(&config, &chain)?));
+    let provider_factory = Arc::new(RethProviderFactory::new(&config, &chain)?);
     let backfill = BackfillManager::new(
         db.clone(),
         &config,
