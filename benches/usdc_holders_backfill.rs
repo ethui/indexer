@@ -9,7 +9,7 @@ use diesel::{
     sql_types::{Array, Bytea, Integer},
     RunQueryDsl,
 };
-use iron_indexer::sync::RethProvider;
+use iron_indexer::sync::RethProviderFactory;
 use iron_indexer::{
     config::Config,
     db::{types::Address, Db},
@@ -56,7 +56,7 @@ async fn run(config: Config) -> Result<()> {
     let db = Db::connect(&config, account_tx, job_tx).await?;
     let chain = db.setup_chain(&config.chain).await?;
 
-    let provider_factory = Arc::new(RethProvider::new(&config, &chain)?);
+    let provider_factory = Arc::new(RethProviderFactory::new(&config, &chain)?);
     let backfill = BackfillManager::new(
         db.clone(),
         &config,

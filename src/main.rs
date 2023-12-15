@@ -14,7 +14,7 @@ use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter};
 
 use config::Config;
 
-use crate::sync::{RethProvider, StopStrategy};
+use crate::sync::{RethProviderFactory, StopStrategy};
 
 use self::db::Db;
 use self::sync::{BackfillManager, Forward, SyncJob};
@@ -30,7 +30,7 @@ async fn main() -> Result<()> {
     let (job_tx, job_rx) = mpsc::unbounded_channel();
     let db = Db::connect(&config, account_tx, job_tx).await?;
     let chain = db.setup_chain(&config.chain).await?;
-    let provider_factory = Arc::new(RethProvider::new(&config, &chain)?);
+    let provider_factory = Arc::new(RethProviderFactory::new(&config, &chain)?);
     let token = CancellationToken::new();
 
     // setup each task

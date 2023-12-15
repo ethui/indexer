@@ -16,7 +16,7 @@ use crate::{
     db::{models::BackfillJobWithId, Db},
 };
 
-use super::{RethProvider, SyncJob, Worker};
+use super::{RethProviderFactory, SyncJob, Worker};
 
 #[derive(Debug)]
 pub enum StopStrategy {
@@ -45,14 +45,14 @@ pub struct BackfillManager {
     jobs_rcv: UnboundedReceiver<()>,
     config: Arc<RwLock<Config>>,
     stop: StopStrategy,
-    provider_factory: Arc<RethProvider>,
+    provider_factory: Arc<RethProviderFactory>,
 }
 
 impl BackfillManager {
     pub fn new(
         db: Db,
         config: &Config,
-        provider_factory: Arc<RethProvider>,
+        provider_factory: Arc<RethProviderFactory>,
         jobs_rcv: UnboundedReceiver<()>,
         stop: StopStrategy,
     ) -> Self {
@@ -145,12 +145,13 @@ impl SyncJob for Worker<Backfill> {
     #[instrument(skip(self), fields(chain_id = self.chain.chain_id))]
     async fn run(mut self) -> Result<()> {
         for block in (self.inner.low..self.inner.high).rev() {
+            let provider = self.provider_factory.get()?;
             // start by checking shutdown signal
             if self.cancellation_token.is_cancelled() {
                 break;
             }
 
-            let header = self.provider.header_by_number(block)?.unwrap();
+            let header = provider.header_by_number(block)?.unwrap();
             self.process_block(&header).await?;
             self.maybe_flush(block).await?;
         }
@@ -189,7 +190,7 @@ impl Backfill {
         db: Db,
         config: Arc<RwLock<Config>>,
         job: BackfillJobWithId,
-        provider_factory: Arc<RethProvider>,
+        provider_factory: Arc<RethProviderFactory>,
         cancellation_token: CancellationToken,
     ) -> Result<Worker<Self>> {
         let config = config.read().await;

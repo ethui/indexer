@@ -11,7 +11,7 @@ use tracing::{info, instrument};
 use crate::db::models::Chain;
 use crate::{config::Config, db::Db};
 
-use super::{RethProvider, SyncJob, Worker};
+use super::{RethProviderFactory, SyncJob, Worker};
 
 /// Main sync job
 /// Walks the blockchain forward, from a pre-configured starting block.
@@ -39,7 +39,8 @@ impl SyncJob for Worker<Forward> {
 
             self.process_new_accounts().await?;
 
-            match self.provider.header_by_number(self.inner.next_block)? {
+            let provider = self.provider_factory.get()?;
+            match provider.header_by_number(self.inner.next_block)? {
                 // got a block. process it, only flush if needed
                 Some(header) => {
                     self.process_block(&header).await?;
@@ -111,7 +112,7 @@ impl Forward {
         db: Db,
         config: &Config,
         chain: Chain,
-        provider_factory: Arc<RethProvider>,
+        provider_factory: Arc<RethProviderFactory>,
         accounts_rcv: UnboundedReceiver<Address>,
         cancellation_token: CancellationToken,
     ) -> Result<Worker<Self>> {
