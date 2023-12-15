@@ -11,7 +11,7 @@ use tokio::task;
 async fn run_multiple_providers(blocks: u64, concurrency: usize) -> Result<()> {
     let spec = (*reth_primitives::SEPOLIA).clone();
     let path = Path::new("/mnt/data/eth/sepolia/reth/db");
-    let db = open_db_read_only(&path, None)?;
+    let db = open_db_read_only(path, None)?;
 
     let factory: ProviderFactory<reth_db::DatabaseEnv> = ProviderFactory::new(db, spec.clone());
 
@@ -25,8 +25,8 @@ async fn run_multiple_providers(blocks: u64, concurrency: usize) -> Result<()> {
             for block in from..to {
                 let indices = provider.block_body_indices(block as u64).unwrap().unwrap();
                 for id in indices.first_tx_num..indices.first_tx_num + indices.tx_count {
-                    let tx = provider.transaction_by_id_no_hash(id).unwrap();
-                    let receipt = provider.receipt(id).unwrap();
+                    let _tx = provider.transaction_by_id_no_hash(id).unwrap();
+                    let _receipt = provider.receipt(id).unwrap();
                 }
                 //println!("finished {}", block);
             }
