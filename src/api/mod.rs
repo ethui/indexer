@@ -26,7 +26,6 @@ pub async fn start(db: Db, config: HttpConfig) -> JoinHandle<Result<(), std::io:
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    tracing::debug!("listening on {}", listener.local_addr().unwrap());
 
     tokio::spawn(async move { axum::serve(listener, app).await })
 }
