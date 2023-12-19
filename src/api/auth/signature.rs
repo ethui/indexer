@@ -19,6 +19,16 @@ pub struct SignatureData {
     expiration_timestamp: u64,
 }
 
+impl SignatureData {
+    pub fn new(address: Address, current_timestamp: u64, expiration_timestamp: u64) -> Self {
+        Self {
+            address,
+            current_timestamp,
+            expiration_timestamp,
+        }
+    }
+}
+
 #[derive(Debug, Error, PartialEq)]
 enum TimeError {
     #[error("Invalid current timestamp")]
@@ -54,11 +64,7 @@ pub fn check_type_data(
     check_time(current_timestamp, expiration_timestamp)?;
 
     let signature = Signature::from_str(signature)?;
-    let data: SignatureData = SignatureData {
-        address,
-        current_timestamp,
-        expiration_timestamp,
-    };
+    let data: SignatureData = SignatureData::new(address, current_timestamp, expiration_timestamp);
 
     let encoded = data.encode_eip712()?;
 
@@ -70,12 +76,14 @@ pub fn check_type_data(
 }
 
 #[cfg(test)]
-mod test {
-    use super::*;
-    use ethers_core::types::transaction::eip712::TypedData;
+pub mod test_utils {
+
+    use crate::api::auth::signature::SignatureData;
+    use color_eyre::Result;
+    use ethers_core::types::Signature;
     use ethers_signers::{coins_bip39::English, MnemonicBuilder, Signer};
 
-    async fn sign_type_data(data: SignatureData) -> Result<Signature> {
+    pub async fn sign_type_data(data: SignatureData) -> Result<Signature> {
         let mnemonic = String::from("test test test test test test test test test test test junk");
         let derivation_path = String::from("m/44'/60'/0'/0");
         let current_path = format!("{}/{}", derivation_path, 0);
@@ -90,6 +98,13 @@ mod test {
 
         Ok(signature)
     }
+}
+
+#[cfg(test)]
+mod test {
+    use super::test_utils;
+    use super::*;
+    use ethers_core::types::transaction::eip712::TypedData;
 
     #[tokio::test]
     async fn test_signature() -> Result<()> {
@@ -100,20 +115,11 @@ mod test {
         let address: Address =
             Address::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap();
 
-        let data: SignatureData = SignatureData {
-            address,
-            current_timestamp,
-            expiration_timestamp,
-        };
+        let data: SignatureData =
+            SignatureData::new(address, current_timestamp, expiration_timestamp);
 
-        let signature = sign_type_data(data).await?.to_string();
+        let signature = test_utils::sign_type_data(data).await?.to_string();
 
-        dbg!(
-            signature.clone(),
-            address,
-            current_timestamp,
-            expiration_timestamp
-        );
         check_type_data(&signature, address, current_timestamp, expiration_timestamp)?;
         Ok(())
     }
@@ -177,11 +183,8 @@ mod test {
         let address: Address =
             Address::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap();
 
-        let data: SignatureData = SignatureData {
-            address,
-            current_timestamp,
-            expiration_timestamp,
-        };
+        let data: SignatureData =
+            SignatureData::new(address, current_timestamp, expiration_timestamp);
 
         let encoded = data.encode_eip712()?;
 

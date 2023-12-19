@@ -59,7 +59,7 @@ where
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let status = match self {
-            AuthError::TokenCreation => StatusCode::INTERNAL_SERVER_ERROR,
+            AuthError::TokenCreation => StatusCode::UNPROCESSABLE_ENTITY,
             AuthError::InvalidToken => StatusCode::BAD_REQUEST,
         };
         let body = Json(json!({
