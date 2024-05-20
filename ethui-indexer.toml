@@ -13,4 +13,4 @@ buffer_size = 1000
 port = 8080
 
 [db]
-url = "postgres://iron_indexer:iron-indexer&12345@localhost/iron_indexer"
+url = "postgres://ethui_indexer:ethui-indexer&12345@localhost/ethui_indexer"

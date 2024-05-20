@@ -9,8 +9,8 @@ use diesel::{
     sql_types::{Array, Bytea, Integer},
     RunQueryDsl,
 };
-use iron_indexer::sync::RethProviderFactory;
-use iron_indexer::{
+use ethui_indexer::sync::RethProviderFactory;
+use ethui_indexer::{
     config::Config,
     db::{types::Address, Db},
     sync::{BackfillManager, StopStrategy},
@@ -23,7 +23,7 @@ use self::utils::one_time_setup;
 /// seeds 1000 initial users
 /// and creates a set of backfill jobs
 fn setup(concurrency: usize, jobs: u64, job_size: u64) -> Result<Config> {
-    let (mut config, mut conn) = utils::setup("benches/iron-indexer.toml")?;
+    let (mut config, mut conn) = utils::setup("benches/ethui-indexer.toml")?;
     config.sync.backfill_concurrency = concurrency;
 
     let addresses: Vec<Address> =
@@ -74,7 +74,7 @@ async fn run(config: Config) -> Result<()> {
 ///   - from 1 to 10000 concurrent jobs
 ///   - job size varies from 1 block to 1000 blocks per job
 fn backfill_1000jobsx1000blocks(c: &mut Criterion) {
-    one_time_setup("benches/iron-indexer.toml").unwrap();
+    one_time_setup("benches/ethui-indexer.toml").unwrap();
 
     let rt = tokio::runtime::Runtime::new().unwrap();
     let mut group = c.benchmark_group("backfill_1000jobsx1000blocks");

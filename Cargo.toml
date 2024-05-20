@@ -1,10 +1,10 @@
 [package]
-name = "iron-indexer"
+name = "ethui-indexer"
 edition = "2021"
 version = "0.0.1"
 license-file = "./LICENSE"
-homepage = "https://github.com/iron-wallet"
-repository = "https://github.com/iron-wallet/indexer"
+homepage = "https://github.com/ethui"
+repository = "https://github.com/ethui/indexer"
 exclude = [".github/"]
 authors = ["Miguel Palhas <mpalhas@gmail.com>"]
 

@@ -1789,6 +1789,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethui-indexer"
+version = "0.0.1"
+dependencies = [
+ "alloy-primitives",
+ "async-trait",
+ "axum",
+ "bigdecimal",
+ "chrono",
+ "clap",
+ "color-eyre",
+ "criterion",
+ "diesel",
+ "diesel-async",
+ "diesel_migrations",
+ "futures",
+ "lazy_static",
+ "rand 0.8.5",
+ "reth-db",
+ "reth-primitives",
+ "reth-provider",
+ "reth-rpc-types",
+ "rstest",
+ "scalable_cuckoo_filter",
+ "serde",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "toml 0.8.8",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "eyre"
 version = "0.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2446,41 +2481,6 @@ name = "ipnet"
 version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f518f335dce6725a761382244631d86cf0ccb2863413590b31338feb467f9c3"
-
-[[package]]
-name = "iron-indexer"
-version = "0.0.1"
-dependencies = [
- "alloy-primitives",
- "async-trait",
- "axum",
- "bigdecimal",
- "chrono",
- "clap",
- "color-eyre",
- "criterion",
- "diesel",
- "diesel-async",
- "diesel_migrations",
- "futures",
- "lazy_static",
- "rand 0.8.5",
- "reth-db",
- "reth-primitives",
- "reth-provider",
- "reth-rpc-types",
- "rstest",
- "scalable_cuckoo_filter",
- "serde",
- "thiserror",
- "tokio",
- "tokio-util",
- "toml 0.8.8",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
-]
 
 [[package]]
 name = "is-terminal"

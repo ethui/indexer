@@ -6,7 +6,11 @@ use serde::Deserialize;
 
 #[derive(Debug, clap::Parser)]
 struct Args {
-    #[clap(long, default_value = "iron-indexer.toml", env = "IRON_INDEXER_CONFIG")]
+    #[clap(
+        long,
+        default_value = "ethui-indexer.toml",
+        env = "ETHUI_INDEXER_CONFIG")
+    ]
     config: PathBuf,
 }
 
