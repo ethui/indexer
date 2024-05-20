@@ -157,7 +157,12 @@ impl<T: std::fmt::Debug> Worker<T> {
             let mut addresses: HashSet<_> = receipt
                 .logs
                 .into_iter()
-                .flat_map(|log| log.topics.into_iter().filter_map(utils::topic_as_address))
+                .flat_map(|log| {
+                    log.topics()
+                        .into_iter()
+                        .filter_map(utils::topic_as_address)
+                        .collect::<Vec<_>>()
+                })
                 .collect();
 
             tx.recover_signer().map(|a| addresses.insert(a));

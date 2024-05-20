@@ -1,8 +1,8 @@
-# Iron Indexer
+# ethui Indexer
 
 [reth]: https://paradigmxyz.github.io/reth/intro.html
 [reth-indexer]: https://github.com/joshstevens19/reth-indexer
-[iron]: https://iron-wallet.xyz
+[ethui]: https://ethui.dev
 [miguel]: https://twitter.com/naps62
 [cuckoo]: https://en.wikipedia.org/wiki/Cuckoo_filter
 
@@ -14,13 +14,13 @@ Reads transaction history from [reth][reth]'s DB (direct from filesystem, skippi
 
 ## Disclaimer
 
-This is currently a prototype, and built to serve a yet-to-be-released feature of [Iron wallet][iron]. All development so far has been with that goal in mind. Don't expect a plug-and-play indexing solution for every use case (at least not right now)
+This is currently a prototype, and built to serve a yet-to-be-released feature of [ethui][ethui]. All development so far has been with that goal in mind. Don't expect a plug-and-play indexing solution for every use case (at least not right now)
 
 ## How to use
 
 🚧 TODO 🚧
 
-For now, check `iron-indexer.toml`, which should help you get started. Feel free to contact [me][miguel] or open issues for any questions.
+For now, check `ethui-indexer.toml`, which should help you get started. Feel free to contact [me][miguel] or open issues for any questions.
 
 ## Why
 
@@ -29,7 +29,7 @@ It's also not enough to sync the `from` and `to` fields of every transaction (wh
 
 On top of this, most indexers require a predetermined set of topics to index, and any changes require a new full walk of the chain.
 
-Instead, `iron-indexer` takes a different approach: new addresses can be added to the sync list at runtime, and self-optimizing backfill jobs are registered to backfill all data for each incoming address.
+Instead, `ethui-indexer` takes a different approach: new addresses can be added to the sync list at runtime, and self-optimizing backfill jobs are registered to backfill all data for each incoming address.
 
 ## How
 
@@ -59,7 +59,7 @@ A few moments later, `carol`'s address joins too. By now both existing jobs have
 The naive approach would be to the new job and run all 3 concurrently.
 This has one drawback thought: both backfill jobs will fetch redundant blocks (1 through 5).
 
-Instead of starting right away, we run a [reorganization step](https://github.com/iron-wallet/indexer/blob/main/src/rearrange.rs):
+Instead of starting right away, we run a [reorganization step](https://github.com/ethui/indexer/blob/main/src/rearrange.rs):
 
 | job             | account set    | block range     | notes                                  |
 | --------------- | -------------- | --------------- | -------------------------------------- |

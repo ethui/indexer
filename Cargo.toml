@@ -1,15 +1,16 @@
 [package]
-name = "iron-indexer"
+name = "ethui-indexer"
 edition = "2021"
 version = "0.0.1"
 license-file = "./LICENSE"
-homepage = "https://github.com/iron-wallet"
-repository = "https://github.com/iron-wallet/indexer"
+homepage = "https://github.com/ethui"
+repository = "https://github.com/ethui/indexer"
 exclude = [".github/"]
 authors = ["Miguel Palhas <mpalhas@gmail.com>"]
 
 [dependencies]
 tokio = { version = "1.33", features = ["full", "sync"] }
+tokio-util = { version = "0.7.10", features = ["rt"] }
 clap = { version = "4.4.8", features = ["derive", "env"] }
 serde = { version = "1.0", features = ["derive", "std"] }
 futures = "0.3.28"
@@ -26,6 +27,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 axum = "0.7.2"
 tower = "0.4.13"
 tower-http = { version = "0.5.0", features = ["cors"] }
+once_cell = "1.18.0"
+jsonwebtoken = "9.2.0"
+serde_json = "1.0.108"
+axum-extra = { version = "0.9.0", features = ["typed-header"] }
 
 # db
 diesel = { version = "2.1.0", features = ["postgres", "chrono", "numeric"] }
@@ -34,32 +39,27 @@ diesel-async = { version = "0.4.1", features = [
   "deadpool",
   "async-connection-wrapper",
 ] }
+diesel_migrations = { version = "2.1.0", features = ["postgres"] }
 chrono = { version = "0.4.31", features = ["serde"], default-features = false }
 bigdecimal = { version = "0.4.2", default-features = false }
 
 # reth
-reth-db = { git = "https://github.com/paradigmxyz/reth", package = "reth-db", tag = "v0.1.0-alpha.12" }
-reth-primitives = { git = "https://github.com/paradigmxyz/reth", package = "reth-primitives", tag = "v0.1.0-alpha.12" }
-reth_provider = { git = "https://github.com/paradigmxyz/reth", package = "reth-provider", tag = "v0.1.0-alpha.12" }
-reth-rpc-types = { git = "https://github.com/paradigmxyz/reth", tag = "v0.1.0-alpha.12" }
-
-
-alloy-primitives = { version = "0.5.0", features = ["serde"] }
+reth-db = { git = "https://github.com/paradigmxyz/reth", package = "reth-db", tag = "v0.2.0-beta.7" }
+reth-primitives = { git = "https://github.com/paradigmxyz/reth", package = "reth-primitives", tag = "v0.2.0-beta.7" }
+reth_provider = { git = "https://github.com/paradigmxyz/reth", package = "reth-provider", tag = "v0.2.0-beta.7" }
+reth-rpc-types = { git = "https://github.com/paradigmxyz/reth", tag = "v0.2.0-beta.7" }
 
 # ethers
 ethers-core = { version = "2.0", default-features = false }
 ethers-signers = { version = "2.0", default-features = false }
 ethers-contract-derive = { version = "2.0", default-features = false }
 
+# alloy
+alloy-primitives = { version = "0.7.2", features = ["serde"] }
+
 # cuckoo
 scalable_cuckoo_filter = "0.2.3"
 rand = { version = "0.8.5", default-features = false, features = ["std_rng"] }
-tokio-util = { version = "0.7.10", features = ["rt"] }
-diesel_migrations = { version = "2.1.0", features = ["postgres"] }
-once_cell = "1.18.0"
-jsonwebtoken = "9.2.0"
-serde_json = "1.0.108"
-axum-extra = { version = "0.9.0", features = ["typed-header"] }
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["async_tokio"] }

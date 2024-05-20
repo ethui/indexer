@@ -10,4 +10,4 @@ buffer_size = 10000
 backfill_concurrency = 1000
 
 [db]
-url = "postgres://iron_indexer:iron-indexer&12345@localhost/iron_indexer_test"
+url = "postgres://ethui_indexer:ethui-indexer&12345@localhost/ethui_indexer_test"

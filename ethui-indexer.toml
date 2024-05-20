@@ -1,5 +1,6 @@
 [reth]
 db = "/mnt/data/eth/sepolia/reth/db"
+static_files = "/mnt/data/eth/sepolia/reth/static_files"
 
 [chain]
 chain_id = 11155111
@@ -13,4 +14,4 @@ port = 8080
 jwt_secret = "secret" # CHANGE THIS
 
 [db]
-url = "postgres://iron_indexer:iron-indexer&12345@localhost/iron_indexer"
+url = "postgres://ethui_indexer:ethui-indexer&12345@localhost/ethui_indexer"

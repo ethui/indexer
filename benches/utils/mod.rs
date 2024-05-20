@@ -7,8 +7,8 @@ use color_eyre::{eyre::eyre, Result};
 use diesel::sql_types::{Bytea, Integer};
 use diesel::{sql_query, Connection, PgConnection, RunQueryDsl};
 use diesel_migrations::MigrationHarness;
-use iron_indexer::db::types::Address;
-use iron_indexer::{config::Config, db::MIGRATIONS};
+use ethui_indexer::db::types::Address;
+use ethui_indexer::{config::Config, db::MIGRATIONS};
 
 pub fn one_time_setup(config_file: &str) -> Result<()> {
     let url = env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL must be set");
