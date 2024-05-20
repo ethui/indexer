@@ -159,7 +159,7 @@ impl<T: std::fmt::Debug> Worker<T> {
                 .into_iter()
                 .flat_map(|log| {
                     log.topics()
-                        .into_iter()
+                        .iter()
                         .filter_map(utils::topic_as_address)
                         .collect::<Vec<_>>()
                 })

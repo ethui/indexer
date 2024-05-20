@@ -1,6 +1,6 @@
 mod utils;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use color_eyre::Result;
 use criterion::*;
@@ -11,9 +11,11 @@ use tokio::task;
 async fn run_multiple_providers(blocks: u64, concurrency: usize) -> Result<()> {
     let spec = (*reth_primitives::SEPOLIA).clone();
     let path = Path::new("/mnt/data/eth/sepolia/reth/db");
-    let db = open_db_read_only(path, None)?;
+    let static_files = PathBuf::from("/mnt/data/eth/sepolia/reth/static_files");
+    let db = open_db_read_only(path, Default::default())?;
 
-    let factory: ProviderFactory<reth_db::DatabaseEnv> = ProviderFactory::new(db, spec.clone());
+    let factory: ProviderFactory<reth_db::DatabaseEnv> =
+        ProviderFactory::new(db, spec.clone(), static_files).unwrap();
 
     let mut handles = Vec::new();
     let blocks_per_task = blocks as usize / concurrency;

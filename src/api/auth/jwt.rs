@@ -18,7 +18,7 @@ use thiserror::Error;
 
 pub static KEYS: Lazy<Keys> = Lazy::new(|| {
     let config = Config::read().expect("failed to read config");
-    let secret = config.http.unwrap().jwt_secret;
+    let secret = config.http.unwrap().jwt_secret();
     Keys::new(secret.as_bytes())
 });
 pub struct Keys {

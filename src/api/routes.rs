@@ -1,6 +1,6 @@
 use super::auth::jwt::{AuthError, Claims, KEYS};
 use super::auth::signature::check_type_data;
-use super::error::Result;
+use super::error::ApiResult;
 use crate::db::Db;
 use axum::extract::State;
 use axum::routing::{get, post};
@@ -28,7 +28,7 @@ async fn register(
     _: Claims,
     State(db): State<Db>,
     Json(register): Json<Register>,
-) -> Result<impl IntoResponse> {
+) -> ApiResult<impl IntoResponse> {
     db.register(register.address.into()).await?;
 
     Ok(())
@@ -47,7 +47,7 @@ pub struct AuthResponse {
     access_token: String,
 }
 
-pub async fn auth(Json(auth): Json<AuthRequest>) -> Result<impl IntoResponse> {
+pub async fn auth(Json(auth): Json<AuthRequest>) -> ApiResult<impl IntoResponse> {
     check_type_data(
         &auth.signature,
         auth.address,
@@ -75,6 +75,7 @@ mod test {
     use super::AuthRequest;
     use crate::api::auth::signature::test_utils;
     use crate::api::auth::signature::SignatureData;
+    use crate::api::error::ApiResult;
     use axum::http::StatusCode;
     use axum::{response::IntoResponse, Json};
     use color_eyre::Result;
@@ -82,7 +83,7 @@ mod test {
     use std::str::FromStr;
 
     #[tokio::test]
-    async fn test_auth_valid_signature() -> Result<()> {
+    async fn test_auth_valid_signature() -> ApiResult<()> {
         let current_timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)?
             .as_secs();
