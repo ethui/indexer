@@ -11,7 +11,7 @@ buffer_size = 1000
 
 [http]
 port = 8080
-jwt_secret = "secret" # CHANGE THIS
+jwt_secret_env = "ETHUI_JWT_SECRET"
 
 [db]
 url = "postgres://ethui_indexer:ethui-indexer&12345@localhost/ethui_indexer"
