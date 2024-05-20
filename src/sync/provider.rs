@@ -20,7 +20,7 @@ impl RethProviderFactory {
     pub fn new(config: &Config, chain: &Chain) -> Result<Self> {
         let chain_id = chain.chain_id as u64;
         let config = &config.reth;
-        let db = open_db_read_only(&config.db, None)?;
+        let db = open_db_read_only(&config.db, Default::default())?;
 
         let spec = match chain_id {
             1 => (*reth_primitives::MAINNET).clone(),
@@ -28,7 +28,8 @@ impl RethProviderFactory {
             _ => return Err(eyre::eyre!("unsupported chain id {}", chain_id)),
         };
 
-        let factory: ProviderFactory<reth_db::DatabaseEnv> = ProviderFactory::new(db, spec);
+        let factory: ProviderFactory<reth_db::DatabaseEnv> =
+            ProviderFactory::new(db, spec, config.static_files.clone())?;
 
         Ok(Self { factory })
     }

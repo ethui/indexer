@@ -1,5 +1,6 @@
 [reth]
 db = "/mnt/data/eth/sepolia/reth/db"
+static_files = "/mnt/data/eth/sepolia/reth/static_files"
 
 [chain]
 chain_id = 11155111

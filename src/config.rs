@@ -25,6 +25,7 @@ pub struct Config {
 #[derive(Deserialize, Clone, Debug)]
 pub struct RethConfig {
     pub db: PathBuf,
+    pub static_files: PathBuf,
 }
 
 #[derive(Debug, Clone, Deserialize)]
