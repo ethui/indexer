@@ -43,8 +43,7 @@ async fn register(
 pub struct AuthRequest {
     signature: String,
     address: Address,
-    current_timestamp: u64,
-    expiration_timestamp: u64,
+    valid_until: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -56,15 +55,9 @@ pub async fn auth(
     Extension(encoding_key): Extension<EncodingKey>,
     Json(auth): Json<AuthRequest>,
 ) -> ApiResult<impl IntoResponse> {
-    check_type_data(
-        &auth.signature,
-        auth.address,
-        auth.current_timestamp,
-        auth.expiration_timestamp,
-    )?;
+    check_type_data(&auth.signature, auth.address, auth.valid_until)?;
 
-    let claims = Claims::new(auth.address, auth.expiration_timestamp as usize);
-    // Create the authorization token
+    let claims = Claims::new(auth.address, auth.valid_until as usize);
     let access_token = encode(&Header::default(), &claims, &encoding_key)?;
 
     // Send the authorized token
@@ -73,70 +66,57 @@ pub async fn auth(
 
 #[cfg(test)]
 mod test {
-
-    use std::str::FromStr;
-
     use axum::{http::StatusCode, response::IntoResponse, Json};
     use color_eyre::Result;
     use ethers_core::types::Address;
+    use rstest::rstest;
 
     use super::{auth, AuthRequest};
     use crate::api::{
-        auth::signature::{test_utils, SignatureData},
+        auth::signature::SignatureData,
         error::ApiResult,
+        test_utils::{address, encoding_key, now, sign_typed_data},
     };
 
+    #[rstest]
     #[tokio::test]
-    async fn test_auth_valid_signature() -> ApiResult<()> {
-        let current_timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_secs();
-        let expiration_timestamp = current_timestamp + 20 * 60;
-        let address: Address =
-            Address::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap();
+    async fn test_auth_valid_signature(address: Address, now: u64) -> ApiResult<()> {
+        let valid_until = now + 20 * 60;
 
-        let data: SignatureData =
-            SignatureData::new(address, current_timestamp, expiration_timestamp);
-
-        let signature = test_utils::sign_type_data(data).await?.to_string();
+        let data: SignatureData = SignatureData::new(address, valid_until);
+        let signature = sign_typed_data(data).await?.to_string();
 
         let auth_request = AuthRequest {
             signature,
             address,
-            current_timestamp,
-            expiration_timestamp,
+            valid_until,
         };
 
-        let auth_response = auth(Json(auth_request)).await?.into_response();
+        let resp = auth(encoding_key(), Json(auth_request))
+            .await?
+            .into_response();
 
-        assert_eq!(auth_response.status(), StatusCode::OK);
+        assert_eq!(resp.status(), StatusCode::OK);
 
         Ok(())
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_auth_valid_signature_invalid_timestamp() -> Result<()> {
+    async fn test_auth_valid_signature_invalid_timestamp(address: Address, now: u64) -> Result<()> {
         let twenty_minutes = 20 * 60;
-        let current_timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_secs()
-            - twenty_minutes;
-        let expiration_timestamp = current_timestamp + twenty_minutes;
-        let address: Address =
-            Address::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap();
+        let valid_until = now + twenty_minutes;
 
-        let data: SignatureData =
-            SignatureData::new(address, current_timestamp, expiration_timestamp);
+        let data: SignatureData = SignatureData::new(address, valid_until);
 
-        let signature = test_utils::sign_type_data(data).await?.to_string();
+        let signature = sign_typed_data(data).await?.to_string();
         let auth_request = AuthRequest {
             signature,
             address,
-            current_timestamp,
-            expiration_timestamp,
+            valid_until,
         };
 
-        let auth_response = auth(Json(auth_request)).await;
+        let auth_response = auth(encoding_key(), Json(auth_request)).await;
         assert!(auth_response.is_err());
 
         let _ = auth_response.map_err(|e| {
@@ -147,31 +127,25 @@ mod test {
         Ok(())
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_auth_invalid_signature() -> Result<()> {
-        let current_timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_secs();
-        let expiration_timestamp = current_timestamp + 20 * 60;
-        let address: Address =
-            Address::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92269").unwrap();
+    async fn test_auth_invalid_signature(address: Address, now: u64) -> Result<()> {
+        let valid_until = now + 20 * 60;
 
-        let data: SignatureData =
-            SignatureData::new(address, current_timestamp, expiration_timestamp);
+        let data: SignatureData = SignatureData::new(address, valid_until);
 
-        let signature = test_utils::sign_type_data(data).await?.to_string();
+        let signature = sign_typed_data(data).await?.to_string();
 
         let auth_request = AuthRequest {
             signature,
             address,
-            current_timestamp,
-            expiration_timestamp,
+            valid_until,
         };
 
-        let auth_response = auth(Json(auth_request)).await;
-        assert!(auth_response.is_err());
+        let resp = auth(encoding_key(), Json(auth_request)).await;
+        assert!(resp.is_err());
 
-        let _ = auth_response.map_err(|e| {
+        let _ = resp.map_err(|e| {
             let response = e.into_response();
             assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
         });

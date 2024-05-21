@@ -14,30 +14,22 @@ use serde::Deserialize;
 )]
 pub struct SignatureData {
     address: Address,
-    valid_from: u64,
     valid_until: u64,
 }
 
 impl SignatureData {
-    pub fn new(address: Address, valid_from: u64, valid_until: u64) -> Self {
+    pub fn new(address: Address, valid_until: u64) -> Self {
         Self {
             address,
-            valid_from,
             valid_until,
         }
     }
 }
 
-pub fn check_time(valid_from: u64, valid_until: u64) -> Result<()> {
+pub fn check_expiration(valid_until: u64) -> Result<()> {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
         .as_secs();
-
-    let five_minutes_ago = now - 5 * 60;
-
-    if (valid_from < five_minutes_ago) || (valid_from > now) {
-        bail!("signature timestamp range in the future");
-    }
 
     if valid_until <= now {
         bail!("signature timestamp has expired");
@@ -46,16 +38,11 @@ pub fn check_time(valid_from: u64, valid_until: u64) -> Result<()> {
     Ok(())
 }
 
-pub fn check_type_data(
-    signature: &str,
-    address: Address,
-    valid_from: u64,
-    expiration_timestamp: u64,
-) -> Result<()> {
-    check_time(valid_from, expiration_timestamp)?;
+pub fn check_type_data(signature: &str, address: Address, valid_until: u64) -> Result<()> {
+    check_expiration(valid_until)?;
 
     let signature = Signature::from_str(signature)?;
-    let data: SignatureData = SignatureData::new(address, valid_from, expiration_timestamp);
+    let data: SignatureData = SignatureData::new(address, valid_until);
 
     let encoded = data.encode_eip712()?;
 
@@ -65,56 +52,37 @@ pub fn check_type_data(
 }
 
 #[cfg(test)]
-pub mod test_utils {
+mod test {
 
     use color_eyre::Result;
-    use ethers_core::types::Signature;
-    use ethers_signers::{coins_bip39::English, MnemonicBuilder, Signer};
+    use ethers_core::types::{
+        transaction::eip712::{Eip712, TypedData},
+        Address,
+    };
+    use rstest::rstest;
 
-    use crate::api::auth::signature::SignatureData;
+    use crate::api::{
+        auth::signature::{check_expiration, check_type_data, SignatureData},
+        test_utils::{address, now, sign_typed_data},
+    };
 
-    pub async fn sign_type_data(data: SignatureData) -> Result<Signature> {
-        let mnemonic = String::from("test test test test test test test test test test test junk");
-        let derivation_path = String::from("m/44'/60'/0'/0");
-        let current_path = format!("{}/{}", derivation_path, 0);
-        let chain_id = 1_u32;
-        let signer = MnemonicBuilder::<English>::default()
-            .phrase(mnemonic.as_ref())
-            .derivation_path(&current_path)?
-            .build()
-            .map(|v| v.with_chain_id(chain_id))?;
-
-        let signature = signer.sign_typed_data(&data).await?;
-
-        Ok(signature)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use ethers_core::types::transaction::eip712::TypedData;
-
-    use super::{test_utils, *};
-
+    #[rstest]
     #[tokio::test]
-    async fn test_signature() -> Result<()> {
-        let valid_from = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_secs();
-        let expiration_timestamp = valid_from + 20 * 60;
-        let address: Address =
-            Address::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap();
+    async fn test_signature(address: Address, now: u64) -> Result<()> {
+        let valid_until = now + 20 * 60;
 
-        let data: SignatureData = SignatureData::new(address, valid_from, expiration_timestamp);
+        let data: SignatureData = SignatureData::new(address, valid_until);
+        let signature = sign_typed_data(data).await?.to_string();
 
-        let signature = test_utils::sign_type_data(data).await?.to_string();
-
-        check_type_data(&signature, address, valid_from, expiration_timestamp)?;
+        check_type_data(&signature, address, valid_until)?;
         Ok(())
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_encoding() -> Result<()> {
+    async fn test_encoding(address: Address, now: u64) -> Result<()> {
+        let valid_until = now + 5 * 60;
+
         let json = serde_json::json!( {
           "types": {
             "EIP712Domain": [
@@ -141,149 +109,38 @@ mod test {
                 "type": "address"
               },
               {
-                "name": "currentTimestamp",
-                "type": "uint64"
-              },
-              {
-                "name": "expirationTimestamp",
+                "name": "validUntil",
                 "type": "uint64"
               }
             ]
           },
           "primaryType": "SignatureData",
           "domain": {
-            "name": "IndexSignature",
+            "name": "IndexAuth",
             "version": "1",
             "chainId": "1",
             "verifyingContract": "0x0000000000000000000000000000000000000000",
           },
           "message": {
-            "address": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
-            "currentTimestamp": 1,
-            "expirationTimestamp": 2
+            "address": format!("0x{:x}",address),
+            "validUntil": valid_until
           }
         });
 
-        let typed_data: TypedData = serde_json::from_value(json).unwrap();
-        let hash = typed_data.encode_eip712().unwrap();
+        let expected_data: TypedData = serde_json::from_value(json).unwrap();
+        let expected_hash = expected_data.encode_eip712()?;
 
-        let valid_from = 1;
-        let expiration_timestamp = 2;
-        let address: Address =
-            Address::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap();
+        let data: SignatureData = SignatureData::new(address, valid_until);
+        let hash = data.encode_eip712()?;
 
-        let data: SignatureData = SignatureData::new(address, valid_from, expiration_timestamp);
-
-        let encoded = data.encode_eip712()?;
-
-        assert_eq!(encoded, hash);
+        assert_eq!(expected_hash, hash);
         Ok(())
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_check_time_invalid_current_time() -> Result<()> {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_secs();
-
-        let initial_time = 0;
-        let five_minutes = 5 * 60;
-        let ten_minutes = 10 * 60;
-        let ten_minutes_ago = now - ten_minutes;
-        let five_minutes_after = now + five_minutes;
-        let ten_minutes_after = now + ten_minutes;
-
-        assert_eq!(
-            check_time(initial_time, five_minutes)
-                .unwrap_err()
-                .downcast::<TimeError>()?,
-            TimeError::InvalidCurrentTimestamp
-        );
-
-        assert_eq!(
-            check_time(initial_time, now)
-                .unwrap_err()
-                .downcast::<TimeError>()?,
-            TimeError::InvalidCurrentTimestamp
-        );
-        assert_eq!(
-            check_time(initial_time, ten_minutes_after)
-                .unwrap_err()
-                .downcast::<TimeError>()?,
-            TimeError::InvalidCurrentTimestamp
-        );
-
-        assert_eq!(
-            check_time(ten_minutes_ago, ten_minutes_after)
-                .unwrap_err()
-                .downcast::<TimeError>()?,
-            TimeError::InvalidCurrentTimestamp
-        );
-
-        assert_eq!(
-            check_time(five_minutes_after, ten_minutes_after)
-                .unwrap_err()
-                .downcast::<TimeError>()?,
-            TimeError::InvalidCurrentTimestamp
-        );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_check_time_invalid_expiration_timestamp() -> Result<()> {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_secs();
-
-        let five_minutes = 5 * 60;
-        let ten_minutes = 10 * 60;
-        let five_minutes_ago = now - five_minutes + 10;
-        let ten_minutes_ago = now - ten_minutes;
-
-        assert_eq!(
-            check_time(now, now).unwrap_err().downcast::<TimeError>()?,
-            TimeError::InvalidExpirationTimestamp
-        );
-
-        assert_eq!(
-            check_time(now, five_minutes_ago)
-                .unwrap_err()
-                .downcast::<TimeError>()?,
-            TimeError::InvalidExpirationTimestamp
-        );
-
-        assert_eq!(
-            check_time(five_minutes_ago, now)
-                .unwrap_err()
-                .downcast::<TimeError>()?,
-            TimeError::InvalidExpirationTimestamp
-        );
-
-        assert_eq!(
-            check_time(five_minutes_ago, ten_minutes_ago)
-                .unwrap_err()
-                .downcast::<TimeError>()?,
-            TimeError::InvalidExpirationTimestamp
-        );
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_check_time_valid_timestamps() -> Result<()> {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_secs();
-
-        let five_minutes = 5 * 60;
-        let ten_minutes = 10 * 60;
-        let five_minutes_ago = now - five_minutes + 10;
-        let five_minutes_after = now + five_minutes;
-        let ten_minutes_after = now + ten_minutes;
-
-        assert!(check_time(five_minutes_ago, ten_minutes_after).is_ok());
-        assert!(check_time(now, five_minutes_after).is_ok());
-
+    async fn test_check_time_invalid_current_time(now: u64) -> Result<()> {
+        assert!(check_expiration(now - 1).is_err());
         Ok(())
     }
 }
