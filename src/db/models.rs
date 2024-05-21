@@ -1,9 +1,10 @@
-use diesel::pg::Pg;
-use diesel::prelude::*;
+use diesel::{pg::Pg, prelude::*};
 use serde::{Deserialize, Serialize};
 
-use super::schema::{accounts, backfill_jobs, chains, txs};
-use super::types::{Address, B256};
+use super::{
+    schema::{accounts, backfill_jobs, chains, txs},
+    types::{Address, B256},
+};
 
 #[derive(Debug, Queryable, Selectable, Serialize)]
 #[diesel(table_name = accounts, check_for_backend(Pg))]

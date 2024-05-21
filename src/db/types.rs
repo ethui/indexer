@@ -1,13 +1,12 @@
 use std::str::FromStr;
 
 use bigdecimal::BigDecimal;
-use diesel::sql_types::Numeric;
 use diesel::{
     deserialize::{self, FromSql, FromSqlRow},
     expression::AsExpression,
     pg::{Pg, PgValue},
     serialize::{self, Output, ToSql},
-    sql_types::Bytea,
+    sql_types::{Bytea, Numeric},
 };
 use serde::{Deserialize, Serialize};
 

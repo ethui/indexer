@@ -1,10 +1,13 @@
+use axum::{
+    extract::State,
+    response::IntoResponse,
+    routing::{get, post},
+    Json, Router,
+};
+use serde::Deserialize;
+
 use super::error::Result;
 use crate::db::Db;
-use axum::extract::State;
-use axum::routing::{get, post};
-use axum::Router;
-use axum::{response::IntoResponse, Json};
-use serde::Deserialize;
 
 pub fn router() -> Router<Db> {
     Router::new()

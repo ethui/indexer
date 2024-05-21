@@ -43,9 +43,4 @@ diesel::table! {
 
 diesel::joinable!(backfill_jobs -> chains (chain_id));
 
-diesel::allow_tables_to_appear_in_same_query!(
-    accounts,
-    backfill_jobs,
-    chains,
-    txs,
-);
+diesel::allow_tables_to_appear_in_same_query!(accounts, backfill_jobs, chains, txs,);

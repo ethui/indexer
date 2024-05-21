@@ -2,13 +2,13 @@ mod error;
 mod routes;
 
 use std::net::SocketAddr;
+
 use tokio::task::JoinHandle;
 use tower_http::cors::CorsLayer;
 use tracing::instrument;
 
-use crate::{config::HttpConfig, db::Db};
-
 use self::routes::router;
+use crate::{config::HttpConfig, db::Db};
 
 #[allow(clippy::async_yields_async)]
 #[instrument(name = "api", skip(db, config), fields(port = config.port))]

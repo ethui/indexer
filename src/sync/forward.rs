@@ -8,10 +8,11 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, instrument};
 
-use crate::db::models::Chain;
-use crate::{config::Config, db::Db};
-
 use super::{RethProviderFactory, SyncJob, Worker};
+use crate::{
+    config::Config,
+    db::{models::Chain, Db},
+};
 
 /// Main sync job
 /// Walks the blockchain forward, from a pre-configured starting block.

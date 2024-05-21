@@ -1,7 +1,8 @@
 use color_eyre::eyre::{self, Result};
-use reth_db::{open_db_read_only, DatabaseEnv};
-
-use reth_db::mdbx::{tx::Tx, RO};
+use reth_db::{
+    mdbx::{tx::Tx, RO},
+    open_db_read_only, DatabaseEnv,
+};
 use reth_provider::{DatabaseProvider, ProviderFactory};
 
 use crate::{config::Config, db::models::Chain};

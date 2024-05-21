@@ -9,8 +9,8 @@ struct Args {
     #[clap(
         long,
         default_value = "ethui-indexer.toml",
-        env = "ETHUI_INDEXER_CONFIG")
-    ]
+        env = "ETHUI_INDEXER_CONFIG"
+    )]
     config: PathBuf,
 }
 

@@ -7,17 +7,17 @@ mod sync;
 use std::sync::Arc;
 
 use color_eyre::eyre::Result;
+use config::Config;
 use tokio::{signal, sync::mpsc};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::info;
 use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter};
 
-use config::Config;
-
+use self::{
+    db::Db,
+    sync::{BackfillManager, Forward, SyncJob},
+};
 use crate::sync::{RethProviderFactory, StopStrategy};
-
-use self::db::Db;
-use self::sync::{BackfillManager, Forward, SyncJob};
 
 #[tokio::main]
 async fn main() -> Result<()> {
