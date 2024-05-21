@@ -9,11 +9,10 @@ use diesel::{
     sql_types::{Array, Bytea, Integer},
     RunQueryDsl,
 };
-use ethui_indexer::sync::RethProviderFactory;
 use ethui_indexer::{
     config::Config,
     db::{types::Address, Db},
-    sync::{BackfillManager, StopStrategy},
+    sync::{BackfillManager, RethProviderFactory, StopStrategy},
 };
 use tokio::sync::mpsc;
 

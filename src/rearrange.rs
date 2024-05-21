@@ -56,9 +56,10 @@ pub fn rearrange(jobs: &[BackfillJob]) -> Vec<BackfillJob> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use alloy_primitives::Address;
     use rstest::*;
+
+    use super::*;
 
     #[derive(Debug, PartialEq)]
     struct FakeJob(Vec<u8>, i32, i32);

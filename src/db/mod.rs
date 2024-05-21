@@ -3,26 +3,23 @@ mod schema;
 pub mod types;
 
 use color_eyre::{eyre::eyre, Result};
-use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use tokio::sync::mpsc::UnboundedSender;
-
 use diesel::{delete, insert_into, prelude::*, update};
 use diesel_async::{
     pooled_connection::{deadpool::Pool, AsyncDieselConnectionManager},
     scoped_futures::ScopedFutureExt,
     AsyncConnection, AsyncPgConnection, RunQueryDsl,
 };
+use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::instrument;
-
-use crate::db::models::BackfillJobWithChainId;
-use crate::{
-    config::{ChainConfig, Config},
-    db::models::{BackfillJob, BackfillJobWithId},
-};
 
 use self::{
     models::{Chain, CreateTx},
     types::Address,
+};
+use crate::{
+    config::{ChainConfig, Config},
+    db::models::{BackfillJob, BackfillJobWithChainId, BackfillJobWithId},
 };
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");

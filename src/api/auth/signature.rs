@@ -1,55 +1,46 @@
-use color_eyre::{eyre::bail, eyre::eyre, Result};
-use ethers_contract_derive::{Eip712, EthAbiType};
-use ethers_core::types::Signature;
-use ethers_core::types::{transaction::eip712::Eip712, Address};
-use serde::Deserialize;
 use std::str::FromStr;
-use thiserror::Error;
+
+use color_eyre::{eyre::bail, Result};
+use ethers_contract_derive::{Eip712, EthAbiType};
+use ethers_core::types::{transaction::eip712::Eip712, Address, Signature};
+use serde::Deserialize;
 
 #[derive(Debug, Clone, Eip712, EthAbiType, Deserialize)]
 #[eip712(
-    name = "IndexSignature",
+    name = "IndexAuth",
     version = "1",
     chain_id = 1,
     verifying_contract = "0x0000000000000000000000000000000000000000"
 )]
 pub struct SignatureData {
     address: Address,
-    current_timestamp: u64,
-    expiration_timestamp: u64,
+    valid_from: u64,
+    valid_until: u64,
 }
 
 impl SignatureData {
-    pub fn new(address: Address, current_timestamp: u64, expiration_timestamp: u64) -> Self {
+    pub fn new(address: Address, valid_from: u64, valid_until: u64) -> Self {
         Self {
             address,
-            current_timestamp,
-            expiration_timestamp,
+            valid_from,
+            valid_until,
         }
     }
 }
 
-#[derive(Debug, Error, PartialEq)]
-enum TimeError {
-    #[error("Invalid current timestamp")]
-    InvalidCurrentTimestamp,
-    #[error("Invalid expiration timestamp")]
-    InvalidExpirationTimestamp,
-}
-
-pub fn check_time(current_timestamp: u64, expiration_timestamp: u64) -> Result<()> {
+pub fn check_time(valid_from: u64, valid_until: u64) -> Result<()> {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
         .as_secs();
 
     let five_minutes_ago = now - 5 * 60;
 
-    if (current_timestamp < five_minutes_ago) || (current_timestamp > now) {
-        bail!(TimeError::InvalidCurrentTimestamp);
+    if (valid_from < five_minutes_ago) || (valid_from > now) {
+        bail!("signature timestamp range in the future");
     }
 
-    if expiration_timestamp <= now {
-        bail!(TimeError::InvalidExpirationTimestamp);
+    if valid_until <= now {
+        bail!("signature timestamp has expired");
     }
 
     Ok(())
@@ -58,19 +49,17 @@ pub fn check_time(current_timestamp: u64, expiration_timestamp: u64) -> Result<(
 pub fn check_type_data(
     signature: &str,
     address: Address,
-    current_timestamp: u64,
+    valid_from: u64,
     expiration_timestamp: u64,
 ) -> Result<()> {
-    check_time(current_timestamp, expiration_timestamp)?;
+    check_time(valid_from, expiration_timestamp)?;
 
     let signature = Signature::from_str(signature)?;
-    let data: SignatureData = SignatureData::new(address, current_timestamp, expiration_timestamp);
+    let data: SignatureData = SignatureData::new(address, valid_from, expiration_timestamp);
 
     let encoded = data.encode_eip712()?;
 
-    signature
-        .verify(encoded, address)
-        .map_err(|_| eyre!("Signature verification failed"))?;
+    signature.verify(encoded, address)?;
 
     Ok(())
 }
@@ -78,10 +67,11 @@ pub fn check_type_data(
 #[cfg(test)]
 pub mod test_utils {
 
-    use crate::api::auth::signature::SignatureData;
     use color_eyre::Result;
     use ethers_core::types::Signature;
     use ethers_signers::{coins_bip39::English, MnemonicBuilder, Signer};
+
+    use crate::api::auth::signature::SignatureData;
 
     pub async fn sign_type_data(data: SignatureData) -> Result<Signature> {
         let mnemonic = String::from("test test test test test test test test test test test junk");
@@ -102,25 +92,24 @@ pub mod test_utils {
 
 #[cfg(test)]
 mod test {
-    use super::test_utils;
-    use super::*;
     use ethers_core::types::transaction::eip712::TypedData;
+
+    use super::{test_utils, *};
 
     #[tokio::test]
     async fn test_signature() -> Result<()> {
-        let current_timestamp = std::time::SystemTime::now()
+        let valid_from = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)?
             .as_secs();
-        let expiration_timestamp = current_timestamp + 20 * 60;
+        let expiration_timestamp = valid_from + 20 * 60;
         let address: Address =
             Address::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap();
 
-        let data: SignatureData =
-            SignatureData::new(address, current_timestamp, expiration_timestamp);
+        let data: SignatureData = SignatureData::new(address, valid_from, expiration_timestamp);
 
         let signature = test_utils::sign_type_data(data).await?.to_string();
 
-        check_type_data(&signature, address, current_timestamp, expiration_timestamp)?;
+        check_type_data(&signature, address, valid_from, expiration_timestamp)?;
         Ok(())
     }
 
@@ -178,13 +167,12 @@ mod test {
         let typed_data: TypedData = serde_json::from_value(json).unwrap();
         let hash = typed_data.encode_eip712().unwrap();
 
-        let current_timestamp = 1;
+        let valid_from = 1;
         let expiration_timestamp = 2;
         let address: Address =
             Address::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap();
 
-        let data: SignatureData =
-            SignatureData::new(address, current_timestamp, expiration_timestamp);
+        let data: SignatureData = SignatureData::new(address, valid_from, expiration_timestamp);
 
         let encoded = data.encode_eip712()?;
 

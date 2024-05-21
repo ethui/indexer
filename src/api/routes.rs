@@ -1,14 +1,18 @@
-use super::auth::jwt::{AuthError, Claims, KEYS};
-use super::auth::signature::check_type_data;
-use super::error::ApiResult;
-use crate::db::Db;
-use axum::extract::State;
-use axum::routing::{get, post};
-use axum::Router;
-use axum::{response::IntoResponse, Json};
+use axum::{
+    extract::State,
+    response::IntoResponse,
+    routing::{get, post},
+    Extension, Json, Router,
+};
 use ethers_core::types::Address;
-use jsonwebtoken::{encode, Header};
+use jsonwebtoken::{encode, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
+
+use super::{
+    auth::{jwt::Claims, signature::check_type_data},
+    error::ApiResult,
+};
+use crate::db::Db;
 
 pub fn router() -> Router<Db> {
     Router::new()
@@ -29,6 +33,7 @@ async fn register(
     State(db): State<Db>,
     Json(register): Json<Register>,
 ) -> ApiResult<impl IntoResponse> {
+    // TODO this registration needs to be verified (is the user whitelisted? did the user pay?)
     db.register(register.address.into()).await?;
 
     Ok(())
@@ -47,7 +52,10 @@ pub struct AuthResponse {
     access_token: String,
 }
 
-pub async fn auth(Json(auth): Json<AuthRequest>) -> ApiResult<impl IntoResponse> {
+pub async fn auth(
+    Extension(encoding_key): Extension<EncodingKey>,
+    Json(auth): Json<AuthRequest>,
+) -> ApiResult<impl IntoResponse> {
     check_type_data(
         &auth.signature,
         auth.address,
@@ -55,14 +63,9 @@ pub async fn auth(Json(auth): Json<AuthRequest>) -> ApiResult<impl IntoResponse>
         auth.expiration_timestamp,
     )?;
 
-    let claims = Claims {
-        sub: auth.address.to_string(),
-        company: "iron-wallet".to_owned(),
-        exp: auth.expiration_timestamp as usize,
-    };
+    let claims = Claims::new(auth.address, auth.expiration_timestamp as usize);
     // Create the authorization token
-    let access_token = encode(&Header::default(), &claims, &KEYS.encoding)
-        .map_err(|_| AuthError::TokenCreation)?;
+    let access_token = encode(&Header::default(), &claims, &encoding_key)?;
 
     // Send the authorized token
     Ok(Json(AuthResponse { access_token }))
@@ -71,16 +74,17 @@ pub async fn auth(Json(auth): Json<AuthRequest>) -> ApiResult<impl IntoResponse>
 #[cfg(test)]
 mod test {
 
-    use super::auth;
-    use super::AuthRequest;
-    use crate::api::auth::signature::test_utils;
-    use crate::api::auth::signature::SignatureData;
-    use crate::api::error::ApiResult;
-    use axum::http::StatusCode;
-    use axum::{response::IntoResponse, Json};
+    use std::str::FromStr;
+
+    use axum::{http::StatusCode, response::IntoResponse, Json};
     use color_eyre::Result;
     use ethers_core::types::Address;
-    use std::str::FromStr;
+
+    use super::{auth, AuthRequest};
+    use crate::api::{
+        auth::signature::{test_utils, SignatureData},
+        error::ApiResult,
+    };
 
     #[tokio::test]
     async fn test_auth_valid_signature() -> ApiResult<()> {

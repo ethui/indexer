@@ -3,20 +3,19 @@ use std::{sync::Arc, time::Duration};
 use async_trait::async_trait;
 use color_eyre::eyre::Result;
 use reth_provider::HeaderProvider;
-use tokio::select;
 use tokio::{
+    select,
     sync::{mpsc::UnboundedReceiver, RwLock, Semaphore},
     time::sleep,
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{info, instrument};
 
+use super::{RethProviderFactory, SyncJob, Worker};
 use crate::{
     config::Config,
     db::{models::BackfillJobWithId, Db},
 };
-
-use super::{RethProviderFactory, SyncJob, Worker};
 
 #[derive(Debug)]
 pub enum StopStrategy {

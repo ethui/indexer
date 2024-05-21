@@ -3,15 +3,18 @@ mod forward;
 mod provider;
 mod utils;
 
-use std::sync::Arc;
 use std::{
     collections::{BTreeSet, HashSet},
+    sync::Arc,
     time::Duration,
 };
 
 use alloy_primitives::{Address, B256};
 use async_trait::async_trait;
+pub use backfill::{BackfillManager, StopStrategy};
 use color_eyre::eyre::{eyre, Result};
+pub use forward::Forward;
+pub use provider::RethProviderFactory;
 use rand::{rngs::StdRng, SeedableRng};
 use reth_primitives::Header;
 use reth_provider::{BlockNumReader, BlockReader, ReceiptProvider, TransactionsProvider};
@@ -27,10 +30,6 @@ use crate::{
         Db,
     },
 };
-
-pub use backfill::{BackfillManager, StopStrategy};
-pub use forward::Forward;
-pub use provider::RethProviderFactory;
 
 /// Generic sync job state
 #[derive(Debug)]
