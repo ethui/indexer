@@ -1,2 +1,5 @@
-pub mod jwt;
-pub mod signature;
+mod claims;
+mod signature;
+
+pub use claims::Claims;
+pub use signature::IndexAuth;

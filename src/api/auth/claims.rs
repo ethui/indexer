@@ -12,6 +12,18 @@ use ethers_core::types::Address;
 use jsonwebtoken::{decode, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Claims {
+    pub address: Address,
+    pub exp: usize,
+}
+
+impl Claims {
+    pub fn new(address: Address, exp: usize) -> Self {
+        Self { address, exp }
+    }
+}
+
 #[async_trait]
 impl<S> FromRequestParts<S> for Claims
 where
@@ -35,17 +47,5 @@ where
             .map_err(|_| StatusCode::UNAUTHORIZED)?;
 
         Ok(token_data.claims)
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Claims {
-    pub address: Address,
-    pub exp: usize,
-}
-
-impl Claims {
-    pub fn new(address: Address, exp: usize) -> Self {
-        Self { address, exp }
     }
 }

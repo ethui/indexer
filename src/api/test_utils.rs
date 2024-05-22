@@ -2,20 +2,11 @@
 
 use std::str::FromStr;
 
-use axum::Extension;
 use color_eyre::Result;
 use ethers_core::types::{Address, Signature};
 use ethers_signers::{coins_bip39::English, MnemonicBuilder, Signer};
 
-use crate::api::auth::signature::SignatureData;
-
-pub fn decoding_key() -> Extension<jsonwebtoken::DecodingKey> {
-    Extension(jsonwebtoken::DecodingKey::from_secret(&[1, 2]))
-}
-
-pub fn encoding_key() -> Extension<jsonwebtoken::EncodingKey> {
-    Extension(jsonwebtoken::EncodingKey::from_secret(&[1, 2]))
-}
+use crate::api::auth::IndexAuth;
 
 #[rstest::fixture]
 pub fn now() -> u64 {
@@ -30,7 +21,7 @@ pub fn address() -> Address {
     Address::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap()
 }
 
-pub async fn sign_typed_data(data: SignatureData) -> Result<Signature> {
+pub async fn sign_typed_data(data: &IndexAuth) -> Result<Signature> {
     let mnemonic = String::from("test test test test test test test test test test test junk");
     let derivation_path = String::from("m/44'/60'/0'/0");
     let current_path = format!("{}/{}", derivation_path, 0);
@@ -41,7 +32,7 @@ pub async fn sign_typed_data(data: SignatureData) -> Result<Signature> {
         .build()
         .map(|v| v.with_chain_id(chain_id))?;
 
-    let signature = signer.sign_typed_data(&data).await?;
+    let signature = signer.sign_typed_data(data).await?;
 
     Ok(signature)
 }
