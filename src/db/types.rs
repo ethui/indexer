@@ -28,6 +28,12 @@ impl From<alloy_primitives::Address> for Address {
     }
 }
 
+impl From<ethers_core::types::Address> for Address {
+    fn from(value: ethers_core::types::Address) -> Self {
+        alloy_primitives::Address::from_slice(value.as_bytes()).into()
+    }
+}
+
 impl From<alloy_primitives::U256> for U256 {
     fn from(value: alloy_primitives::U256) -> Self {
         Self(value)

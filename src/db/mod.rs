@@ -104,7 +104,7 @@ impl Db {
         use diesel::sql_query;
 
         let mut conn = self.pool.get().await?;
-        for table in ["backfill_jobs"].iter() {
+        for table in ["accounts", "chains", "backfill_jobs", "txs"].iter() {
             sql_query(format!("TRUNCATE TABLE {} CASCADE", table))
                 .execute(&mut conn)
                 .await
@@ -168,6 +168,7 @@ impl Db {
 
         let res = insert_into(dsl::accounts)
             .values((dsl::address.eq(&address), dsl::chain_id.eq(self.chain_id)))
+            .on_conflict_do_nothing()
             .execute(&mut conn)
             .await;
 

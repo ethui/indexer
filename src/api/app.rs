@@ -23,7 +23,6 @@ pub fn app(db: Db, config: HttpConfig) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/auth", post(auth))
-        .route("/register", post(register))
         .layer(CorsLayer::permissive())
         .layer(Extension(encoding_key))
         .layer(Extension(decoding_key))
@@ -31,22 +30,6 @@ pub fn app(db: Db, config: HttpConfig) -> Router {
 }
 
 async fn health() -> impl IntoResponse {}
-
-#[derive(Debug, Deserialize)]
-struct Register {
-    address: alloy_primitives::Address,
-}
-
-async fn register(
-    _: IndexerAuth,
-    State(db): State<Db>,
-    Json(register): Json<Register>,
-) -> ApiResult<impl IntoResponse> {
-    // TODO this registration needs to be verified (is the user whitelisted? did the user pay?)
-    db.register(register.address.into()).await?;
-
-    Ok(())
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuthRequest {
@@ -61,11 +44,15 @@ pub struct AuthResponse {
 
 pub async fn auth(
     Extension(encoding_key): Extension<EncodingKey>,
+    State(db): State<Db>,
     Json(auth): Json<AuthRequest>,
 ) -> ApiResult<impl IntoResponse> {
     auth.data
         .check(&auth.signature)
         .map_err(|_| ApiError::InvalidCredentials)?;
+
+    // TODO this registration needs to be verified (is the user whitelisted? did the user pay?)
+    db.register(auth.data.address.into()).await?;
 
     let access_token = encode(&Header::default(), &auth.data, &encoding_key)?;
 
@@ -136,6 +123,35 @@ mod test {
         );
 
         let resp = app.oneshot(req).await?;
+        assert_eq!(resp.status(), StatusCode::OK);
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    #[serial]
+    async fn test_auth_twice(#[future(awt)] app: Router, address: Address, now: u64) -> Result<()> {
+        let valid_until = now + 20 * 60;
+        let data: IndexerAuth = IndexerAuth::new(address, valid_until);
+
+        let req = post(
+            "/auth",
+            AuthRequest {
+                signature: sign_typed_data(&data).await?,
+                data: data.clone(),
+            },
+        );
+        let req2 = post(
+            "/auth",
+            AuthRequest {
+                signature: sign_typed_data(&data).await?,
+                data,
+            },
+        );
+
+        let resp = app.clone().oneshot(req).await?;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let resp = app.oneshot(req2).await?;
         assert_eq!(resp.status(), StatusCode::OK);
         Ok(())
     }
