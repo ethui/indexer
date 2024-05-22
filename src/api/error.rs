@@ -3,20 +3,27 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
+#[derive(Debug, thiserror::Error)]
+pub enum ApiError {
+    #[error("Invalid Credentials")]
+    InvalidCredentials,
+
     #[error(transparent)]
-    Generic(#[from] color_eyre::Report),
+    Jsonwebtoken(#[from] jsonwebtoken::errors::Error),
+
+    #[error(transparent)]
+    Unknown(#[from] color_eyre::Report),
 }
 
-pub type Result<T> = std::result::Result<T, Error>;
+pub type ApiResult<T> = Result<T, ApiError>;
 
-impl IntoResponse for Error {
+impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let (status_code, message) = match self {
-            Self::Generic(e) => (StatusCode::UNPROCESSABLE_ENTITY, e.to_string()),
+        let status_code = match self {
+            ApiError::InvalidCredentials | ApiError::Jsonwebtoken(_) => StatusCode::UNAUTHORIZED,
+            ApiError::Unknown(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
-        (status_code, message).into_response()
+        (status_code, self.to_string()).into_response()
     }
 }

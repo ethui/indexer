@@ -52,6 +52,14 @@ pub struct SyncConfig {
 pub struct HttpConfig {
     #[serde(default = "default_http_port")]
     pub port: u16,
+
+    pub jwt_secret_env: String,
+}
+
+impl HttpConfig {
+    pub fn jwt_secret(&self) -> String {
+        std::env::var(&self.jwt_secret_env).expect("JWT secret not set")
+    }
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -75,6 +83,7 @@ impl Default for HttpConfig {
     fn default() -> Self {
         Self {
             port: default_http_port(),
+            jwt_secret_env: "ETHUI_JWT_SECRET".to_owned(),
         }
     }
 }
