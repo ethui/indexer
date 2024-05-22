@@ -85,12 +85,16 @@ mod test {
     use jsonwebtoken::{DecodingKey, EncodingKey};
     use rstest::{fixture, rstest};
     use serde::Serialize;
+    use serial_test::serial;
     use tower::ServiceExt;
 
     use super::{auth, AuthRequest};
-    use crate::api::{
-        auth::IndexerAuth,
-        test_utils::{address, now, sign_typed_data},
+    use crate::{
+        api::{
+            auth::IndexerAuth,
+            test_utils::{address, now, sign_typed_data},
+        },
+        db::Db,
     };
 
     fn post<B: Serialize>(uri: &str, body: B) -> Request<Body> {
@@ -103,20 +107,23 @@ mod test {
     }
 
     #[fixture]
-    fn app() -> Router {
+    async fn app() -> Router {
         let jwt_secret = "secret".to_owned();
         let encoding_key = EncodingKey::from_secret(jwt_secret.as_ref());
         let decoding_key = DecodingKey::from_secret(jwt_secret.as_ref());
+        let db = Db::connect_test().await.unwrap();
 
         Router::new()
             .route("/auth", routing::post(auth))
             .layer(Extension(encoding_key))
             .layer(Extension(decoding_key))
+            .with_state(db)
     }
 
     #[rstest]
     #[tokio::test]
-    async fn test_auth(app: Router, address: Address, now: u64) -> Result<()> {
+    #[serial]
+    async fn test_auth(#[future(awt)] app: Router, address: Address, now: u64) -> Result<()> {
         let valid_until = now + 20 * 60;
         let data: IndexerAuth = IndexerAuth::new(address, valid_until);
 
@@ -135,7 +142,12 @@ mod test {
 
     #[rstest]
     #[tokio::test]
-    async fn test_auth_expired_signature(app: Router, address: Address, now: u64) -> Result<()> {
+    #[serial]
+    async fn test_auth_expired_signature(
+        #[future(awt)] app: Router,
+        address: Address,
+        now: u64,
+    ) -> Result<()> {
         let valid_until = now - 20;
         let data: IndexerAuth = IndexerAuth::new(address, valid_until);
 
@@ -154,7 +166,12 @@ mod test {
 
     #[rstest]
     #[tokio::test]
-    async fn test_auth_invalid_signature(address: Address, app: Router, now: u64) -> Result<()> {
+    #[serial]
+    async fn test_auth_invalid_signature(
+        #[future(awt)] app: Router,
+        address: Address,
+        now: u64,
+    ) -> Result<()> {
         let valid_until = now + 20 * 60;
         let data: IndexerAuth = IndexerAuth::new(address, valid_until);
         let invalid_data: IndexerAuth = IndexerAuth::new(Address::zero(), valid_until);

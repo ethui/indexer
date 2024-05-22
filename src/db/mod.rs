@@ -33,12 +33,12 @@ pub struct Db {
     pool: Pool<AsyncPgConnection>,
 
     /// notify sync job of new accounts
-    new_accounts_tx: UnboundedSender<alloy_primitives::Address>,
+    new_accounts_tx: Option<UnboundedSender<alloy_primitives::Address>>,
 
     /// notify backfill job of new jobs
     /// (which are created from new accounts, but asynchronously, so need their own event)
     /// payload is empty because the job only needs a notification to rearrange from DB data
-    new_job_tx: UnboundedSender<()>,
+    new_job_tx: Option<UnboundedSender<()>>,
 
     /// chain ID we're running on
     chain_id: i32,
@@ -58,10 +58,28 @@ impl Db {
 
         Ok(Self {
             pool,
-            new_accounts_tx,
-            new_job_tx,
+            new_accounts_tx: Some(new_accounts_tx),
+            new_job_tx: Some(new_job_tx),
             chain_id: config.chain.chain_id,
         })
+    }
+
+    #[cfg(test)]
+    pub async fn connect_test() -> Result<Self> {
+        let db_url = std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL not set");
+        Self::migrate(&db_url).await?;
+        let db_config = AsyncDieselConnectionManager::<AsyncPgConnection>::new(db_url);
+        let pool = Pool::builder(db_config).build()?;
+
+        let res = Self {
+            pool,
+            new_accounts_tx: None,
+            new_job_tx: None,
+            chain_id: 31337,
+        };
+
+        res.truncate().await?;
+        Ok(res)
     }
 
     #[instrument(skip(url))]
@@ -76,6 +94,22 @@ impl Db {
         })
         .await??;
 
+        Ok(())
+    }
+
+    /// Truncate all tables
+    /// to be called before each unit test
+    #[cfg(test)]
+    async fn truncate(&self) -> Result<()> {
+        use diesel::sql_query;
+
+        let mut conn = self.pool.get().await?;
+        for table in ["backfill_jobs"].iter() {
+            sql_query(format!("TRUNCATE TABLE {} CASCADE", table))
+                .execute(&mut conn)
+                .await
+                .unwrap();
+        }
         Ok(())
     }
 
@@ -138,8 +172,8 @@ impl Db {
             .await;
 
         // notify sync job if creation was successful
-        if res.is_ok() {
-            self.new_accounts_tx.send(address.0)?;
+        if let (Ok(_), Some(tx)) = (&res, &self.new_accounts_tx) {
+            tx.send(address.0)?;
         }
 
         handle_error(res).await
@@ -188,8 +222,8 @@ impl Db {
             .await;
 
         // notify backfill job new work is available
-        if res.is_ok() {
-            self.new_job_tx.send(())?;
+        if let (Ok(_), Some(tx)) = (&res, &self.new_job_tx) {
+            tx.send(())?;
         }
 
         handle_error(res).await
