@@ -11,8 +11,8 @@ use serde::{Deserialize, Serialize};
     verifying_contract = "0x0000000000000000000000000000000000000000"
 )]
 pub struct IndexerAuth {
-    pub(super) address: Address,
-    pub(super) valid_until: u64,
+    pub address: Address,
+    pub valid_until: u64,
 }
 
 impl IndexerAuth {
