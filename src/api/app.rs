@@ -4,13 +4,13 @@ use axum::{
     routing::{get, post},
     Extension, Json, Router,
 };
-use ethers_core::types::{Address, Signature};
+use ethers_core::types::Signature;
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 use tower_http::cors::CorsLayer;
 
 use super::{
-    auth::{Claims, IndexAuth},
+    auth::IndexerAuth,
     error::{ApiError, ApiResult},
 };
 use crate::{config::HttpConfig, db::Db};
@@ -38,7 +38,7 @@ struct Register {
 }
 
 async fn register(
-    _: Claims,
+    _: IndexerAuth,
     State(db): State<Db>,
     Json(register): Json<Register>,
 ) -> ApiResult<impl IntoResponse> {
@@ -51,8 +51,7 @@ async fn register(
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuthRequest {
     signature: Signature,
-    address: Address,
-    valid_until: u64,
+    data: IndexerAuth,
 }
 
 #[derive(Debug, Serialize)]
@@ -64,12 +63,11 @@ pub async fn auth(
     Extension(encoding_key): Extension<EncodingKey>,
     Json(auth): Json<AuthRequest>,
 ) -> ApiResult<impl IntoResponse> {
-    let data = IndexAuth::new(auth.address, auth.valid_until);
-    data.check(&auth.signature)
+    auth.data
+        .check(&auth.signature)
         .map_err(|_| ApiError::InvalidCredentials)?;
 
-    let claims = Claims::new(auth.address, auth.valid_until as usize);
-    let access_token = encode(&Header::default(), &claims, &encoding_key)?;
+    let access_token = encode(&Header::default(), &auth.data, &encoding_key)?;
 
     // Send the authorized token
     Ok(Json(AuthResponse { access_token }))
@@ -91,7 +89,7 @@ mod test {
 
     use super::{auth, AuthRequest};
     use crate::api::{
-        auth::IndexAuth,
+        auth::IndexerAuth,
         test_utils::{address, now, sign_typed_data},
     };
 
@@ -120,14 +118,13 @@ mod test {
     #[tokio::test]
     async fn test_auth(app: Router, address: Address, now: u64) -> Result<()> {
         let valid_until = now + 20 * 60;
-        let data: IndexAuth = IndexAuth::new(address, valid_until);
+        let data: IndexerAuth = IndexerAuth::new(address, valid_until);
 
         let req = post(
             "/auth",
             AuthRequest {
                 signature: sign_typed_data(&data).await?,
-                address,
-                valid_until,
+                data,
             },
         );
 
@@ -140,14 +137,13 @@ mod test {
     #[tokio::test]
     async fn test_auth_expired_signature(app: Router, address: Address, now: u64) -> Result<()> {
         let valid_until = now - 20;
-        let data: IndexAuth = IndexAuth::new(address, valid_until);
+        let data: IndexerAuth = IndexerAuth::new(address, valid_until);
 
         let req = post(
             "/auth",
             AuthRequest {
                 signature: sign_typed_data(&data).await?,
-                address,
-                valid_until,
+                data,
             },
         );
 
@@ -160,14 +156,14 @@ mod test {
     #[tokio::test]
     async fn test_auth_invalid_signature(address: Address, app: Router, now: u64) -> Result<()> {
         let valid_until = now + 20 * 60;
-        let data: IndexAuth = IndexAuth::new(Address::zero(), valid_until);
+        let data: IndexerAuth = IndexerAuth::new(address, valid_until);
+        let invalid_data: IndexerAuth = IndexerAuth::new(Address::zero(), valid_until);
 
         let req = post(
             "/auth",
             AuthRequest {
-                signature: sign_typed_data(&data).await?,
-                address,
-                valid_until,
+                signature: sign_typed_data(&invalid_data).await?,
+                data,
             },
         );
 

@@ -1,5 +1,4 @@
-mod claims;
+mod middleware;
 mod signature;
 
-pub use claims::Claims;
-pub use signature::IndexAuth;
+pub use signature::IndexerAuth;

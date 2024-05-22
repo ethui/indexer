@@ -8,24 +8,12 @@ use axum_extra::{
     headers::{authorization::Bearer, Authorization},
     TypedHeader,
 };
-use ethers_core::types::Address;
 use jsonwebtoken::{decode, DecodingKey, Validation};
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Claims {
-    pub address: Address,
-    pub exp: usize,
-}
-
-impl Claims {
-    pub fn new(address: Address, exp: usize) -> Self {
-        Self { address, exp }
-    }
-}
+use super::IndexerAuth;
 
 #[async_trait]
-impl<S> FromRequestParts<S> for Claims
+impl<S> FromRequestParts<S> for IndexerAuth
 where
     S: Send + Sync,
 {
@@ -43,7 +31,7 @@ where
             .map_err(|_| StatusCode::UNAUTHORIZED)?;
 
         // Decode the user data
-        let token_data = decode::<Claims>(bearer.token(), &key, &Validation::default())
+        let token_data = decode::<IndexerAuth>(bearer.token(), &key, &Validation::default())
             .map_err(|_| StatusCode::UNAUTHORIZED)?;
 
         Ok(token_data.claims)

@@ -1,21 +1,21 @@
 use color_eyre::{eyre::bail, Result};
 use ethers_contract_derive::{Eip712, EthAbiType};
 use ethers_core::types::{transaction::eip712::Eip712, Address, Signature};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Eip712, EthAbiType, Deserialize)]
+#[derive(Debug, Clone, Eip712, EthAbiType, Serialize, Deserialize)]
 #[eip712(
     name = "ethui",
     version = "1",
     chain_id = 1,
     verifying_contract = "0x0000000000000000000000000000000000000000"
 )]
-pub struct IndexAuth {
-    address: Address,
-    valid_until: u64,
+pub struct IndexerAuth {
+    pub(super) address: Address,
+    pub(super) valid_until: u64,
 }
 
-impl IndexAuth {
+impl IndexerAuth {
     pub fn new(address: Address, valid_until: u64) -> Self {
         Self {
             address,
@@ -60,7 +60,7 @@ mod test {
     #[rstest]
     #[tokio::test]
     async fn check_signature(address: Address, now: u64) -> Result<()> {
-        let data: IndexAuth = IndexAuth::new(address, now + 20);
+        let data: IndexerAuth = IndexerAuth::new(address, now + 20);
         let signature = sign_typed_data(&data).await?;
 
         data.check(&signature)?;
@@ -92,7 +92,7 @@ mod test {
                 "type": "address"
               }
             ],
-            "IndexAuth": [
+            "IndexerAuth": [
               {
                 "name": "address",
                 "type": "address"
@@ -103,7 +103,7 @@ mod test {
               }
             ]
           },
-          "primaryType": "IndexAuth",
+          "primaryType": "IndexerAuth",
           "domain": {
             "name": "ethui",
             "version": "1",
@@ -119,7 +119,7 @@ mod test {
         let expected_data: TypedData = serde_json::from_value(json).unwrap();
         let expected_hash = expected_data.encode_eip712()?;
 
-        let data: IndexAuth = IndexAuth::new(address, valid_until);
+        let data: IndexerAuth = IndexerAuth::new(address, valid_until);
         let hash = data.encode_eip712()?;
 
         assert_eq!(expected_hash, hash);
@@ -129,7 +129,7 @@ mod test {
     #[rstest]
     #[tokio::test]
     async fn check_fails_with_expired_timestamp(address: Address, now: u64) -> Result<()> {
-        let data: IndexAuth = IndexAuth::new(address, now - 20);
+        let data: IndexerAuth = IndexerAuth::new(address, now - 20);
 
         assert!(data.check_expiration().is_err());
         Ok(())
