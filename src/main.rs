@@ -52,7 +52,7 @@ async fn main() -> Result<()> {
     );
     let api = config.http.map(|c| api::start(db.clone(), c));
 
-    // spawn and tasks and track them
+    // spawn and track tasks
     let tracker = TaskTracker::new();
     tracker.spawn(sync.run());
     tracker.spawn(backfill.run());
