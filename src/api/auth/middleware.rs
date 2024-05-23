@@ -39,6 +39,8 @@ where
         ))
         .map_err(|_| StatusCode::UNAUTHORIZED)?;
 
+        // TODO do we need to verify the claim is not expired?
+
         Ok(token_data.claims)
     }
 }

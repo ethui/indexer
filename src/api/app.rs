@@ -21,11 +21,17 @@ pub fn app(db: Db, jwt_secret: String) -> Router {
     let encoding_key = EncodingKey::from_secret(jwt_secret.as_ref());
     let decoding_key = DecodingKey::from_secret(jwt_secret.as_ref());
 
-    Router::new()
+    let protected_routes = Router::new()
         .route("/test", post(test))
-        .route_layer(from_extractor::<Claims>())
+        .route_layer(from_extractor::<Claims>());
+
+    let public_routes = Router::new()
         .route("/health", get(health))
-        .route("/auth", post(auth))
+        .route("/auth", post(auth));
+
+    Router::new()
+        .nest("/api", protected_routes)
+        .nest("/api", public_routes)
         .layer(CorsLayer::permissive())
         .layer(Extension(encoding_key))
         .layer(Extension(decoding_key))
@@ -134,7 +140,7 @@ mod test {
         let data = IndexerAuth::new(address, valid_until);
 
         let req = post(
-            "/auth",
+            "/api/auth",
             AuthRequest {
                 signature: sign_typed_data(&data).await?,
                 data,
@@ -154,14 +160,14 @@ mod test {
         let data = IndexerAuth::new(address, valid_until);
 
         let req = post(
-            "/auth",
+            "/api/auth",
             AuthRequest {
                 signature: sign_typed_data(&data).await?,
                 data: data.clone(),
             },
         );
         let req2 = post(
-            "/auth",
+            "/api/auth",
             AuthRequest {
                 signature: sign_typed_data(&data).await?,
                 data,
@@ -187,7 +193,7 @@ mod test {
         let data = IndexerAuth::new(address, valid_until);
 
         let req = post(
-            "/auth",
+            "/api/auth",
             AuthRequest {
                 signature: sign_typed_data(&data).await?,
                 data,
@@ -212,7 +218,7 @@ mod test {
         let invalid_data = IndexerAuth::new(Address::zero(), valid_until);
 
         let req = post(
-            "/auth",
+            "/api/auth",
             AuthRequest {
                 signature: sign_typed_data(&invalid_data).await?,
                 data,
@@ -228,7 +234,7 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn test_protected_endpoint_without_auth(#[future(awt)] app: Router) -> Result<()> {
-        let req = post("/test", ());
+        let req = post("/api/test", ());
         let resp = app.oneshot(req).await?;
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
         Ok(())
@@ -246,7 +252,7 @@ mod test {
         let data = IndexerAuth::new(address, valid_until);
 
         let req = post(
-            "/auth",
+            "/api/auth",
             AuthRequest {
                 signature: sign_typed_data(&data).await?,
                 data,
@@ -256,7 +262,7 @@ mod test {
         let resp = app.clone().oneshot(req).await?;
         let jwt: AuthResponse = to_json_resp(resp).await?;
         //
-        let req = post_with_jwt("/test", jwt.access_token, ());
+        let req = post_with_jwt("/api/test", jwt.access_token, ());
         let resp = app.oneshot(req).await?;
         assert_eq!(resp.status(), StatusCode::OK);
         Ok(())
@@ -266,7 +272,7 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn test_unprotected_endpoint(#[future(awt)] app: Router) -> Result<()> {
-        let req = get("/health");
+        let req = get("/api/health");
         let resp = app.oneshot(req).await?;
         assert_eq!(resp.status(), StatusCode::OK);
         Ok(())
