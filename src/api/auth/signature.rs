@@ -15,6 +15,30 @@ pub struct IndexerAuth {
     pub valid_until: u64,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Claims {
+    pub sub: Address,
+    pub exp: u64,
+}
+
+impl From<IndexerAuth> for Claims {
+    fn from(value: IndexerAuth) -> Self {
+        Self {
+            sub: value.address,
+            exp: value.valid_until,
+        }
+    }
+}
+
+impl From<Claims> for IndexerAuth {
+    fn from(value: Claims) -> Self {
+        Self {
+            address: value.sub,
+            valid_until: value.exp,
+        }
+    }
+}
+
 impl IndexerAuth {
     pub fn new(address: Address, valid_until: u64) -> Self {
         Self {
@@ -60,7 +84,7 @@ mod test {
     #[rstest]
     #[tokio::test]
     async fn check_signature(address: Address, now: u64) -> Result<()> {
-        let data: IndexerAuth = IndexerAuth::new(address, now + 20);
+        let data = IndexerAuth::new(address, now + 20);
         let signature = sign_typed_data(&data).await?;
 
         data.check(&signature)?;
@@ -107,11 +131,11 @@ mod test {
           "domain": {
             "name": "ethui",
             "version": "1",
-            "chainId": "1",
+            "chainId": 1,
             "verifyingContract": "0x0000000000000000000000000000000000000000",
           },
           "message": {
-            "address": format!("0x{:x}",address),
+            "address": format!("0x{:x}", address),
             "validUntil": valid_until
           }
         });
@@ -119,7 +143,7 @@ mod test {
         let expected_data: TypedData = serde_json::from_value(json).unwrap();
         let expected_hash = expected_data.encode_eip712()?;
 
-        let data: IndexerAuth = IndexerAuth::new(address, valid_until);
+        let data = IndexerAuth::new(address, valid_until);
         let hash = data.encode_eip712()?;
 
         assert_eq!(expected_hash, hash);
@@ -129,7 +153,7 @@ mod test {
     #[rstest]
     #[tokio::test]
     async fn check_fails_with_expired_timestamp(address: Address, now: u64) -> Result<()> {
-        let data: IndexerAuth = IndexerAuth::new(address, now - 20);
+        let data = IndexerAuth::new(address, now - 20);
 
         assert!(data.check_expiration().is_err());
         Ok(())

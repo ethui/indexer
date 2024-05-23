@@ -1,4 +1,4 @@
 mod middleware;
 mod signature;
 
-pub use signature::IndexerAuth;
+pub use signature::{Claims, IndexerAuth};

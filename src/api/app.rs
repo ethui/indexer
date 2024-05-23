@@ -1,5 +1,6 @@
 use axum::{
     extract::State,
+    middleware::from_extractor,
     response::IntoResponse,
     routing::{get, post},
     Extension, Json, Router,
@@ -7,10 +8,11 @@ use axum::{
 use ethers_core::types::Signature;
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tower_http::cors::CorsLayer;
 
 use super::{
-    auth::IndexerAuth,
+    auth::{Claims, IndexerAuth},
     error::{ApiError, ApiResult},
 };
 use crate::{config::HttpConfig, db::Db};
@@ -21,6 +23,8 @@ pub fn app(db: Db, config: HttpConfig) -> Router {
     let decoding_key = DecodingKey::from_secret(jwt_secret.as_ref());
 
     Router::new()
+        .route("/test", post(test))
+        .route_layer(from_extractor::<Claims>())
         .route("/health", get(health))
         .route("/auth", post(auth))
         .layer(CorsLayer::permissive())
@@ -37,9 +41,13 @@ pub struct AuthRequest {
     data: IndexerAuth,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct AuthResponse {
     access_token: String,
+}
+
+pub async fn test() -> impl IntoResponse {
+    Json(json!({"foo": "bar"}))
 }
 
 pub async fn auth(
@@ -53,8 +61,7 @@ pub async fn auth(
 
     // TODO this registration needs to be verified (is the user whitelisted? did the user pay?)
     db.register(auth.data.address.into()).await?;
-
-    let access_token = encode(&Header::default(), &auth.data, &encoding_key)?;
+    let access_token = encode(&Header::default(), &Claims::from(auth.data), &encoding_key)?;
 
     // Send the authorized token
     Ok(Json(AuthResponse { access_token }))
@@ -65,6 +72,7 @@ mod test {
     use axum::{
         body::Body,
         http::{Request, StatusCode},
+        middleware::from_extractor,
         routing, Extension, Router,
     };
     use color_eyre::Result;
@@ -78,17 +86,37 @@ mod test {
     use super::{auth, AuthRequest};
     use crate::{
         api::{
-            auth::IndexerAuth,
-            test_utils::{address, now, sign_typed_data},
+            app::AuthResponse,
+            auth::{Claims, IndexerAuth},
+            test_utils::{address, now, sign_typed_data, to_json_resp},
         },
         db::Db,
     };
+
+    fn get(uri: &str) -> Request<Body> {
+        Request::builder()
+            .uri(uri)
+            .method("GET")
+            .header("content-type", "application/json")
+            .body(Body::empty())
+            .unwrap()
+    }
 
     fn post<B: Serialize>(uri: &str, body: B) -> Request<Body> {
         Request::builder()
             .uri(uri)
             .method("POST")
             .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_string(&body).unwrap()))
+            .unwrap()
+    }
+
+    fn post_with_jwt<B: Serialize>(uri: &str, jwt: String, body: B) -> Request<Body> {
+        Request::builder()
+            .uri(uri)
+            .method("POST")
+            .header("content-type", "application/json")
+            .header("Authorization", format!("Bearer {}", jwt))
             .body(Body::from(serde_json::to_string(&body).unwrap()))
             .unwrap()
     }
@@ -101,6 +129,9 @@ mod test {
         let db = Db::connect_test().await.unwrap();
 
         Router::new()
+            .route("/test", routing::post(super::test))
+            .layer(from_extractor::<Claims>())
+            .route("/health", routing::get(super::health))
             .route("/auth", routing::post(auth))
             .layer(Extension(encoding_key))
             .layer(Extension(decoding_key))
@@ -112,7 +143,7 @@ mod test {
     #[serial]
     async fn test_auth(#[future(awt)] app: Router, address: Address, now: u64) -> Result<()> {
         let valid_until = now + 20 * 60;
-        let data: IndexerAuth = IndexerAuth::new(address, valid_until);
+        let data = IndexerAuth::new(address, valid_until);
 
         let req = post(
             "/auth",
@@ -132,7 +163,7 @@ mod test {
     #[serial]
     async fn test_auth_twice(#[future(awt)] app: Router, address: Address, now: u64) -> Result<()> {
         let valid_until = now + 20 * 60;
-        let data: IndexerAuth = IndexerAuth::new(address, valid_until);
+        let data = IndexerAuth::new(address, valid_until);
 
         let req = post(
             "/auth",
@@ -165,7 +196,7 @@ mod test {
         now: u64,
     ) -> Result<()> {
         let valid_until = now - 20;
-        let data: IndexerAuth = IndexerAuth::new(address, valid_until);
+        let data = IndexerAuth::new(address, valid_until);
 
         let req = post(
             "/auth",
@@ -189,8 +220,8 @@ mod test {
         now: u64,
     ) -> Result<()> {
         let valid_until = now + 20 * 60;
-        let data: IndexerAuth = IndexerAuth::new(address, valid_until);
-        let invalid_data: IndexerAuth = IndexerAuth::new(Address::zero(), valid_until);
+        let data = IndexerAuth::new(address, valid_until);
+        let invalid_data = IndexerAuth::new(Address::zero(), valid_until);
 
         let req = post(
             "/auth",
@@ -202,6 +233,54 @@ mod test {
 
         let resp = app.oneshot(req).await?;
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    #[serial]
+    async fn test_protected_endpoint_without_auth(#[future(awt)] app: Router) -> Result<()> {
+        let req = post("/test", ());
+        let resp = app.oneshot(req).await?;
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    #[serial]
+    async fn test_protected_endpoint_with_auth(
+        #[future(awt)] app: Router,
+        address: Address,
+        now: u64,
+    ) -> Result<()> {
+        let valid_until = now + 20;
+        let data = IndexerAuth::new(address, valid_until);
+
+        let req = post(
+            "/auth",
+            AuthRequest {
+                signature: sign_typed_data(&data).await?,
+                data,
+            },
+        );
+
+        let resp = app.clone().oneshot(req).await?;
+        let jwt: AuthResponse = to_json_resp(resp).await?;
+        //
+        let req = post_with_jwt("/test", jwt.access_token, ());
+        let resp = app.oneshot(req).await?;
+        assert_eq!(resp.status(), StatusCode::OK);
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    #[serial]
+    async fn test_unprotected_endpoint(#[future(awt)] app: Router) -> Result<()> {
+        let req = get("/health");
+        let resp = app.oneshot(req).await?;
+        assert_eq!(resp.status(), StatusCode::OK);
         Ok(())
     }
 }
