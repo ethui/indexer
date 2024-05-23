@@ -15,10 +15,9 @@ use super::{
     auth::{Claims, IndexerAuth},
     error::{ApiError, ApiResult},
 };
-use crate::{config::HttpConfig, db::Db};
+use crate::db::Db;
 
-pub fn app(db: Db, config: HttpConfig) -> Router {
-    let jwt_secret = config.jwt_secret();
+pub fn app(db: Db, jwt_secret: String) -> Router {
     let encoding_key = EncodingKey::from_secret(jwt_secret.as_ref());
     let decoding_key = DecodingKey::from_secret(jwt_secret.as_ref());
 
@@ -72,22 +71,20 @@ mod test {
     use axum::{
         body::Body,
         http::{Request, StatusCode},
-        middleware::from_extractor,
-        routing, Extension, Router,
+        Router,
     };
     use color_eyre::Result;
     use ethers_core::types::Address;
-    use jsonwebtoken::{DecodingKey, EncodingKey};
     use rstest::{fixture, rstest};
     use serde::Serialize;
     use serial_test::serial;
     use tower::ServiceExt;
 
-    use super::{auth, AuthRequest};
+    use super::AuthRequest;
     use crate::{
         api::{
             app::AuthResponse,
-            auth::{Claims, IndexerAuth},
+            auth::IndexerAuth,
             test_utils::{address, now, sign_typed_data, to_json_resp},
         },
         db::Db,
@@ -124,18 +121,9 @@ mod test {
     #[fixture]
     async fn app() -> Router {
         let jwt_secret = "secret".to_owned();
-        let encoding_key = EncodingKey::from_secret(jwt_secret.as_ref());
-        let decoding_key = DecodingKey::from_secret(jwt_secret.as_ref());
         let db = Db::connect_test().await.unwrap();
 
-        Router::new()
-            .route("/test", routing::post(super::test))
-            .layer(from_extractor::<Claims>())
-            .route("/health", routing::get(super::health))
-            .route("/auth", routing::post(auth))
-            .layer(Extension(encoding_key))
-            .layer(Extension(decoding_key))
-            .with_state(db)
+        super::app(db, jwt_secret)
     }
 
     #[rstest]

@@ -16,7 +16,7 @@ use crate::{config::HttpConfig, db::Db};
 pub async fn start(db: Db, config: HttpConfig) -> JoinHandle<Result<(), std::io::Error>> {
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    let app = app(db.clone(), config);
+    let app = app(db.clone(), config.jwt_secret());
 
     tokio::spawn(async move { axum::serve(listener, app).await })
 }
