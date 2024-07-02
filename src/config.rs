@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use color_eyre::eyre::Result;
+use reth_primitives::{Address, U256};
 use serde::Deserialize;
 
 #[derive(Debug, clap::Parser)]
@@ -24,6 +25,8 @@ pub struct Config {
     pub http: Option<HttpConfig>,
 
     pub db: DbConfig,
+
+    pub payment: Option<PaymentConfig>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -65,6 +68,12 @@ impl HttpConfig {
 #[derive(Deserialize, Clone, Debug)]
 pub struct DbConfig {
     pub url: String,
+}
+
+#[derive(Deserialize, Clone, Debug, Copy)]
+pub struct PaymentConfig {
+    pub address: Address,
+    pub min_amount: U256,
 }
 
 impl Config {
