@@ -15,9 +15,15 @@ use super::{
     auth::{Claims, IndexerAuth},
     error::{ApiError, ApiResult},
 };
-use crate::db::Db;
+use crate::{config::WhitelistConfig, db::Db};
 
-pub fn app(db: Db, jwt_secret: String) -> Router {
+#[derive(Debug, Clone)]
+pub struct AppState {
+    db: Db,
+    whitelist: WhitelistConfig,
+}
+
+pub fn app(db: Db, jwt_secret: String, whitelist: WhitelistConfig) -> Router {
     let encoding_key = EncodingKey::from_secret(jwt_secret.as_ref());
     let decoding_key = DecodingKey::from_secret(jwt_secret.as_ref());
 
@@ -35,7 +41,7 @@ pub fn app(db: Db, jwt_secret: String) -> Router {
         .layer(CorsLayer::permissive())
         .layer(Extension(encoding_key))
         .layer(Extension(decoding_key))
-        .with_state(db)
+        .with_state(AppState { db, whitelist })
 }
 
 async fn health() -> impl IntoResponse {}
@@ -57,23 +63,29 @@ pub async fn test() -> impl IntoResponse {
 
 pub async fn auth(
     Extension(encoding_key): Extension<EncodingKey>,
-    State(db): State<Db>,
+    State(AppState { db, whitelist }): State<AppState>,
     Json(auth): Json<AuthRequest>,
 ) -> ApiResult<impl IntoResponse> {
     auth.data
         .check(&auth.signature)
         .map_err(|_| ApiError::InvalidCredentials)?;
 
-    // TODO this registration needs to be verified (is the user whitelisted? did the user pay?)
-    db.register(auth.data.address.into()).await?;
-    let access_token = encode(&Header::default(), &Claims::from(auth.data), &encoding_key)?;
+    if whitelist.is_whitelisted(&auth.data.get_address()) {
+        // TODO this registration needs to be verified (is the user whitelisted? did the user pay?)
+        db.register(auth.data.address.into()).await?;
+        let access_token = encode(&Header::default(), &Claims::from(auth.data), &encoding_key)?;
 
-    // Send the authorized token
-    Ok(Json(AuthResponse { access_token }))
+        // Send the authorized token
+        Ok(Json(AuthResponse { access_token }))
+    } else {
+        Err(ApiError::InvalidCredentials)
+    }
 }
 
 #[cfg(test)]
 mod test {
+    use std::str::FromStr;
+
     use axum::{
         body::Body,
         http::{Request, StatusCode},
@@ -93,6 +105,7 @@ mod test {
             auth::IndexerAuth,
             test_utils::{address, now, sign_typed_data, to_json_resp},
         },
+        config::WhitelistConfig,
         db::Db,
     };
 
@@ -128,8 +141,12 @@ mod test {
     async fn app() -> Router {
         let jwt_secret = "secret".to_owned();
         let db = Db::connect_test().await.unwrap();
+        let whitelist = WhitelistConfig::for_test(vec![reth_primitives::Address::from_str(
+            "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+        )
+        .unwrap()]);
 
-        super::app(db, jwt_secret)
+        super::app(db, jwt_secret, whitelist)
     }
 
     #[rstest]

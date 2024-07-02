@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use color_eyre::{eyre::bail, Result};
 use ethers_contract_derive::{Eip712, EthAbiType};
 use ethers_core::types::{transaction::eip712::Eip712, Address, Signature};
@@ -65,6 +67,10 @@ impl IndexerAuth {
         }
 
         Ok(())
+    }
+
+    pub fn get_address(&self) -> reth_primitives::Address {
+        reth_primitives::Address::from_str(&format!("0x{:x}", self.address)).unwrap()
     }
 }
 

@@ -50,7 +50,9 @@ async fn main() -> Result<()> {
         job_rx,
         StopStrategy::Token(token.clone()),
     );
-    let api = config.http.map(|c| api::start(db.clone(), c));
+    let api = config
+        .http
+        .map(|c| api::start(db.clone(), c, config.whitelist));
 
     // spawn and track tasks
     let tracker = TaskTracker::new();

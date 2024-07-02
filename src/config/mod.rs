@@ -1,8 +1,12 @@
+mod whitelist;
+
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use color_eyre::eyre::Result;
 use serde::Deserialize;
+
+pub use self::whitelist::WhitelistConfig;
 
 #[derive(Debug, clap::Parser)]
 struct Args {
@@ -24,6 +28,7 @@ pub struct Config {
     pub http: Option<HttpConfig>,
 
     pub db: DbConfig,
+    pub whitelist: WhitelistConfig,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -71,7 +76,10 @@ impl Config {
     pub fn read() -> Result<Self> {
         let args = Args::parse();
 
-        Self::read_from(args.config.as_path())
+        let mut config = Self::read_from(args.config.as_path())?;
+        config.whitelist.preload()?;
+
+        Ok(config)
     }
 
     pub fn read_from(path: &Path) -> Result<Self> {
