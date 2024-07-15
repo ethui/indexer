@@ -30,7 +30,7 @@ pub struct Config {
     pub payment: Option<PaymentConfig>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, Default)]
 pub struct RethConfig {
     pub db: PathBuf,
     pub static_files: PathBuf,

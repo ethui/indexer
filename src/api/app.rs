@@ -57,7 +57,7 @@ pub async fn register(
     State(db): State<Db>,
     Json(register): Json<RegisterRequest>,
 ) -> ApiResult<impl IntoResponse> {
-    register.proof.validate(register.address).await?;
+    register.proof.validate(register.address, &db).await?;
 
     // TODO this registration needs to be verified (is the user whitelisted? did the user pay?)
     db.register(register.address.into()).await?;
