@@ -57,7 +57,7 @@ pub async fn test() -> impl IntoResponse {
 
 pub async fn auth(
     Extension(encoding_key): Extension<EncodingKey>,
-    State(AppState { db, config, .. }): State<AppState>,
+    State(AppState { db, config }): State<AppState>,
     Json(auth): Json<AuthRequest>,
 ) -> ApiResult<impl IntoResponse> {
     auth.data
