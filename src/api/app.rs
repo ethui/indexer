@@ -65,7 +65,7 @@ pub async fn auth(
         .map_err(|_| ApiError::InvalidCredentials)?;
 
     if config.whitelist.is_whitelisted(&auth.data.get_address()) {
-        // TODO this registration needs to be verified (is the user whitelisted? did the user pay?)
+        // TODO: this registration needs to be verified (is the user whitelisted? did the user pay?)
         db.register(auth.data.address.into()).await?;
         let access_token = encode(&Header::default(), &Claims::from(auth.data), &encoding_key)?;
 
