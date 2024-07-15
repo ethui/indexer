@@ -16,7 +16,6 @@ use super::{
     auth::{Claims, IndexerAuth},
     error::{ApiError, ApiResult},
 };
-use crate::{config::WhitelistConfig, db::Db};
 
 pub fn app(jwt_secret: String, state: AppState) -> Router {
     let encoding_key = EncodingKey::from_secret(jwt_secret.as_ref());
@@ -58,15 +57,14 @@ pub async fn test() -> impl IntoResponse {
 
 pub async fn auth(
     Extension(encoding_key): Extension<EncodingKey>,
-    State(AppState { db, .. }): State<AppState>,
+    State(AppState { db, config, .. }): State<AppState>,
     Json(auth): Json<AuthRequest>,
 ) -> ApiResult<impl IntoResponse> {
     auth.data
         .check(&auth.signature)
         .map_err(|_| ApiError::InvalidCredentials)?;
 
-    if todo!() {
-        //whitelist.is_whitelisted(&auth.data.get_address()) {
+    if config.whitelist.is_whitelisted(&auth.data.get_address()) {
         // TODO this registration needs to be verified (is the user whitelisted? did the user pay?)
         db.register(auth.data.address.into()).await?;
         let access_token = encode(&Header::default(), &Claims::from(auth.data), &encoding_key)?;
@@ -80,7 +78,6 @@ pub async fn auth(
 
 #[cfg(test)]
 mod test {
-    use std::str::FromStr;
 
     use axum::{
         body::Body,
@@ -89,7 +86,7 @@ mod test {
     };
     use color_eyre::Result;
     use ethers_core::types::Address;
-    use rstest::{fixture, rstest};
+    use rstest::rstest;
     use serde::Serialize;
     use serial_test::serial;
     use tower::{Service, ServiceExt};
@@ -102,7 +99,7 @@ mod test {
             auth::IndexerAuth,
             test_utils::{address, now, sign_typed_data, to_json_resp},
         },
-        config::{Config, WhitelistConfig},
+        config::Config,
         db::Db,
     };
 
@@ -137,12 +134,6 @@ mod test {
     async fn build_app() -> Router {
         let jwt_secret = "secret".to_owned();
         let db = Db::connect_test().await.unwrap();
-
-        let mut config = Config::for_test();
-        config.whitelist = WhitelistConfig::for_test(vec![reth_primitives::Address::from_str(
-            "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
-        )
-        .unwrap()]);
 
         let state = AppState {
             db,

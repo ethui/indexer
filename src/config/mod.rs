@@ -1,6 +1,8 @@
 mod whitelist;
 
 use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::str::FromStr;
 
 use clap::Parser;
 use color_eyre::eyre::Result;
@@ -132,6 +134,10 @@ impl Config {
             db: DbConfig {
                 url: "none".to_owned(),
             },
+            whitelist: WhitelistConfig::for_test(vec![reth_primitives::Address::from_str(
+                "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+            )
+            .unwrap()]),
         }
     }
 }

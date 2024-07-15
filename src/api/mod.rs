@@ -10,10 +10,7 @@ use tokio::task::JoinHandle;
 use tracing::instrument;
 
 use self::{app::app, app_state::AppState};
-use crate::{
-    config::{Config, HttpConfig, WhitelistConfig},
-    db::Db,
-};
+use crate::{config::Config, db::Db};
 
 #[allow(clippy::async_yields_async)]
 #[instrument(name = "api", skip(db, config), fields(port = config.http.clone().unwrap().port))]
@@ -22,7 +19,6 @@ pub async fn start(db: Db, config: Config) -> JoinHandle<Result<(), std::io::Err
 
     let addr = SocketAddr::from(([0, 0, 0, 0], http_config.port));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    let app = app(db.clone(), config.jwt_secret());
 
     let state = AppState { db, config };
     let app = app(http_config.jwt_secret(), state);
