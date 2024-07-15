@@ -65,6 +65,7 @@ serial_test = "3.1.1"
 criterion = { version = "0.5.1", features = ["async_tokio"] }
 lazy_static = "1.4.0"
 rstest = "0.18.2"
+tempfile = "3.10"
 
 [[bench]]
 name = "provider_concurrency"

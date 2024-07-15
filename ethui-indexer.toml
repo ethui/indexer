@@ -15,3 +15,6 @@ jwt_secret_env = "ETHUI_JWT_SECRET"
 
 [db]
 url = "postgres://ethui_indexer:ethui-indexer&12345@localhost/ethui_indexer"
+
+[whitelist]
+file = "/home/naps62/ethui/whitelists/lists/all.txt"

@@ -1,8 +1,14 @@
+mod whitelist;
+
 use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::str::FromStr;
 
 use clap::Parser;
 use color_eyre::eyre::Result;
 use serde::Deserialize;
+
+pub use self::whitelist::WhitelistConfig;
 
 #[derive(Debug, clap::Parser)]
 struct Args {
@@ -24,6 +30,7 @@ pub struct Config {
     pub http: Option<HttpConfig>,
 
     pub db: DbConfig,
+    pub whitelist: WhitelistConfig,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -71,7 +78,10 @@ impl Config {
     pub fn read() -> Result<Self> {
         let args = Args::parse();
 
-        Self::read_from(args.config.as_path())
+        let mut config = Self::read_from(args.config.as_path())?;
+        config.whitelist.preload()?;
+
+        Ok(config)
     }
 
     pub fn read_from(path: &Path) -> Result<Self> {
@@ -124,6 +134,10 @@ impl Config {
             db: DbConfig {
                 url: "none".to_owned(),
             },
+            whitelist: WhitelistConfig::for_test(vec![reth_primitives::Address::from_str(
+                "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+            )
+            .unwrap()]),
         }
     }
 }

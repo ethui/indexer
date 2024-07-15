@@ -57,23 +57,28 @@ pub async fn test() -> impl IntoResponse {
 
 pub async fn auth(
     Extension(encoding_key): Extension<EncodingKey>,
-    State(AppState { db, .. }): State<AppState>,
+    State(AppState { db, config }): State<AppState>,
     Json(auth): Json<AuthRequest>,
 ) -> ApiResult<impl IntoResponse> {
     auth.data
         .check(&auth.signature)
         .map_err(|_| ApiError::InvalidCredentials)?;
 
-    // TODO this registration needs to be verified (is the user whitelisted? did the user pay?)
-    db.register(auth.data.address.into()).await?;
-    let access_token = encode(&Header::default(), &Claims::from(auth.data), &encoding_key)?;
+    if config.whitelist.is_whitelisted(&auth.data.get_address()) {
+        // TODO: this registration needs to be verified (is the user whitelisted? did the user pay?)
+        db.register(auth.data.address.into()).await?;
+        let access_token = encode(&Header::default(), &Claims::from(auth.data), &encoding_key)?;
 
-    // Send the authorized token
-    Ok(Json(AuthResponse { access_token }))
+        // Send the authorized token
+        Ok(Json(AuthResponse { access_token }))
+    } else {
+        Err(ApiError::InvalidCredentials)
+    }
 }
 
 #[cfg(test)]
 mod test {
+
     use axum::{
         body::Body,
         http::{Request, StatusCode},
@@ -81,7 +86,7 @@ mod test {
     };
     use color_eyre::Result;
     use ethers_core::types::Address;
-    use rstest::{fixture, rstest};
+    use rstest::rstest;
     use serde::Serialize;
     use serial_test::serial;
     use tower::{Service, ServiceExt};
@@ -129,6 +134,7 @@ mod test {
     async fn build_app() -> Router {
         let jwt_secret = "secret".to_owned();
         let db = Db::connect_test().await.unwrap();
+
         let state = AppState {
             db,
             config: Config::for_test(),
