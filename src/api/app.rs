@@ -161,6 +161,23 @@ mod test {
     #[rstest]
     #[tokio::test]
     #[serial]
+    async fn test_register(#[future(awt)] app: Router, address: Address) -> Result<()> {
+        let req = post(
+            "/api/register",
+            RegisterRequest {
+                address,
+                proof: RegistrationProof::Test,
+            },
+        );
+        let resp = app.clone().oneshot(req).await?;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    #[serial]
     async fn test_auth(#[future(awt)] app: Router, address: Address, now: u64) -> Result<()> {
         let valid_until = now + 20 * 60;
         let data = IndexerAuth::new(address, valid_until);
