@@ -21,8 +21,8 @@ impl RegistrationProof {
                 if !config.whitelist.is_whitelisted(&address) {
                     return Err(eyre!("Not Whitelisted"));
                 }
-                todo!()
             }
+
             Self::TxHash(_hash) => {
                 todo!()
             }

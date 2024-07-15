@@ -63,10 +63,8 @@ pub async fn register(
 
     register.proof.validate(addr, &db, &config).await?;
 
-    // TODO this registration needs to be verified (is the user whitelisted? did the user pay?)
     db.register(register.address.into()).await?;
 
-    // Send the authorized token
     Ok(Json(json!({"result": "success"})))
 }
 
