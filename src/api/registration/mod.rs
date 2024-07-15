@@ -1,9 +1,8 @@
-use color_eyre::Result;
-use ethers_core::types::Address;
-use reth_primitives::TxHash;
+use color_eyre::{eyre::eyre, Result};
+use reth_primitives::{Address, TxHash};
 use serde::{Deserialize, Serialize};
 
-use crate::db::Db;
+use crate::{config::Config, db::Db};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum RegistrationProof {
@@ -16,9 +15,12 @@ pub enum RegistrationProof {
 
 #[allow(unused)]
 impl RegistrationProof {
-    pub async fn validate(&self, address: Address, db: &Db) -> Result<()> {
+    pub async fn validate(&self, address: Address, db: &Db, config: &Config) -> Result<()> {
         match self {
             Self::Whitelist => {
+                if !config.whitelist.is_whitelisted(&address) {
+                    return Err(eyre!("Not Whitelisted"));
+                }
                 todo!()
             }
             Self::TxHash(_hash) => {
@@ -28,5 +30,7 @@ impl RegistrationProof {
             #[cfg(test)]
             Self::Test => return Ok(()),
         };
+
+        Ok(())
     }
 }

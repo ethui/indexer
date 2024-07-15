@@ -19,3 +19,6 @@ url = "postgres://ethui_indexer:ethui-indexer&12345@localhost/ethui_indexer"
 [payment]
 address = "0x0063A660Fb166E9deF01C7B4fd0303B054Ed1B9e"
 min_amount = "10000000000000000"                       # 0.01 ether
+
+[whitelist]
+file = "/home/naps62/ethui/whitelists/lists/all.txt"

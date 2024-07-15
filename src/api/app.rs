@@ -1,3 +1,5 @@
+use std::str::FromStr as _;
+
 use axum::{
     extract::State,
     middleware::from_extractor,
@@ -12,13 +14,13 @@ use serde_json::json;
 use tower_http::cors::CorsLayer;
 
 use super::{
+    app_state::AppState,
     auth::{Claims, IndexerAuth},
     error::{ApiError, ApiResult},
     registration::RegistrationProof,
 };
-use crate::db::Db;
 
-pub fn app(db: Db, jwt_secret: String) -> Router {
+pub fn app(jwt_secret: String, state: AppState) -> Router {
     let encoding_key = EncodingKey::from_secret(jwt_secret.as_ref());
     let decoding_key = DecodingKey::from_secret(jwt_secret.as_ref());
 
@@ -37,7 +39,7 @@ pub fn app(db: Db, jwt_secret: String) -> Router {
         .layer(CorsLayer::permissive())
         .layer(Extension(encoding_key))
         .layer(Extension(decoding_key))
-        .with_state(db)
+        .with_state(state)
 }
 
 async fn health() -> impl IntoResponse {}
@@ -54,10 +56,12 @@ pub struct RegisterRequest {
 
 // POST /api/register
 pub async fn register(
-    State(db): State<Db>,
+    State(AppState { db, config }): State<AppState>,
     Json(register): Json<RegisterRequest>,
 ) -> ApiResult<impl IntoResponse> {
-    register.proof.validate(register.address, &db).await?;
+    let addr = reth_primitives::Address::from_str(&format!("0x{:x}", register.address)).unwrap();
+
+    register.proof.validate(addr, &db, &config).await?;
 
     // TODO this registration needs to be verified (is the user whitelisted? did the user pay?)
     db.register(register.address.into()).await?;
@@ -80,7 +84,7 @@ pub struct AuthResponse {
 // POST /api/auth
 pub async fn auth(
     Extension(encoding_key): Extension<EncodingKey>,
-    State(db): State<Db>,
+    State(AppState { db, .. }): State<AppState>,
     Json(auth): Json<AuthRequest>,
 ) -> ApiResult<impl IntoResponse> {
     auth.data
@@ -99,6 +103,7 @@ pub async fn auth(
 
 #[cfg(test)]
 mod test {
+
     use axum::{
         body::Body,
         http::{Request, StatusCode},
@@ -106,19 +111,21 @@ mod test {
     };
     use color_eyre::Result;
     use ethers_core::types::Address;
-    use rstest::{fixture, rstest};
+    use rstest::rstest;
     use serde::Serialize;
     use serial_test::serial;
-    use tower::ServiceExt;
+    use tower::{Service, ServiceExt};
 
     use super::AuthRequest;
     use crate::{
         api::{
             app::{AuthResponse, RegisterRequest},
+            app_state::AppState,
             auth::IndexerAuth,
             registration::RegistrationProof,
             test_utils::{address, now, sign_typed_data, to_json_resp},
         },
+        config::Config,
         db::Db,
     };
 
@@ -150,18 +157,23 @@ mod test {
             .unwrap()
     }
 
-    #[fixture]
-    async fn app() -> Router {
+    async fn build_app() -> Router {
         let jwt_secret = "secret".to_owned();
         let db = Db::connect_test().await.unwrap();
 
-        super::app(db, jwt_secret)
+        let state = AppState {
+            db,
+            config: Config::for_test(),
+        };
+
+        super::app(jwt_secret, state)
     }
 
     #[rstest]
     #[tokio::test]
     #[serial]
-    async fn test_register(#[future(awt)] app: Router, address: Address) -> Result<()> {
+    async fn test_register(address: Address) -> Result<()> {
+        let app = build_app().await;
         let req = post(
             "/api/register",
             RegisterRequest {
@@ -178,7 +190,8 @@ mod test {
     #[rstest]
     #[tokio::test]
     #[serial]
-    async fn test_auth(#[future(awt)] app: Router, address: Address, now: u64) -> Result<()> {
+    async fn test_auth(address: Address, now: u64) -> Result<()> {
+        let app = build_app().await;
         let valid_until = now + 20 * 60;
         let data = IndexerAuth::new(address, valid_until);
 
@@ -207,7 +220,8 @@ mod test {
     #[rstest]
     #[tokio::test]
     #[serial]
-    async fn test_auth_twice(#[future(awt)] app: Router, address: Address, now: u64) -> Result<()> {
+    async fn test_auth_twice(address: Address, now: u64) -> Result<()> {
+        let mut app = build_app().await;
         let valid_until = now + 20 * 60;
         let data = IndexerAuth::new(address, valid_until);
 
@@ -235,8 +249,9 @@ mod test {
             },
         );
 
-        let resp = app.clone().oneshot(req).await?;
+        let resp = app.call(req).await?;
         assert_eq!(resp.status(), StatusCode::OK);
+
         let resp = app.oneshot(req2).await?;
         assert_eq!(resp.status(), StatusCode::OK);
         Ok(())
@@ -245,11 +260,8 @@ mod test {
     #[rstest]
     #[tokio::test]
     #[serial]
-    async fn test_auth_expired_signature(
-        #[future(awt)] app: Router,
-        address: Address,
-        now: u64,
-    ) -> Result<()> {
+    async fn test_auth_expired_signature(address: Address, now: u64) -> Result<()> {
+        let app = build_app().await;
         let valid_until = now - 20;
         let data = IndexerAuth::new(address, valid_until);
 
@@ -269,11 +281,8 @@ mod test {
     #[rstest]
     #[tokio::test]
     #[serial]
-    async fn test_auth_invalid_signature(
-        #[future(awt)] app: Router,
-        address: Address,
-        now: u64,
-    ) -> Result<()> {
+    async fn test_auth_invalid_signature(address: Address, now: u64) -> Result<()> {
+        let app = build_app().await;
         let valid_until = now + 20 * 60;
         let data = IndexerAuth::new(address, valid_until);
         let invalid_data = IndexerAuth::new(Address::zero(), valid_until);
@@ -294,7 +303,8 @@ mod test {
     #[rstest]
     #[tokio::test]
     #[serial]
-    async fn test_protected_endpoint_without_auth(#[future(awt)] app: Router) -> Result<()> {
+    async fn test_protected_endpoint_without_auth() -> Result<()> {
+        let app = build_app().await;
         let req = post("/api/test", ());
         let resp = app.oneshot(req).await?;
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
@@ -304,11 +314,8 @@ mod test {
     #[rstest]
     #[tokio::test]
     #[serial]
-    async fn test_protected_endpoint_with_auth(
-        #[future(awt)] app: Router,
-        address: Address,
-        now: u64,
-    ) -> Result<()> {
+    async fn test_protected_endpoint_with_auth(address: Address, now: u64) -> Result<()> {
+        let app = build_app().await;
         let valid_until = now + 20;
         let data = IndexerAuth::new(address, valid_until);
 
@@ -341,7 +348,8 @@ mod test {
     #[rstest]
     #[tokio::test]
     #[serial]
-    async fn test_unprotected_endpoint(#[future(awt)] app: Router) -> Result<()> {
+    async fn test_unprotected_endpoint() -> Result<()> {
+        let app = build_app().await;
         let req = get("/api/health");
         let resp = app.oneshot(req).await?;
         assert_eq!(resp.status(), StatusCode::OK);

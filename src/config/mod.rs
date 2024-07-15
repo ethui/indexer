@@ -1,9 +1,15 @@
+mod whitelist;
+
 use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::str::FromStr;
 
 use clap::Parser;
 use color_eyre::eyre::Result;
 use reth_primitives::{Address, U256};
 use serde::Deserialize;
+
+pub use self::whitelist::WhitelistConfig;
 
 #[derive(Debug, clap::Parser)]
 struct Args {
@@ -28,6 +34,8 @@ pub struct Config {
 
     #[allow(dead_code)]
     pub payment: Option<PaymentConfig>,
+
+    pub whitelist: WhitelistConfig,
 }
 
 #[derive(Deserialize, Clone, Debug, Default)]
@@ -82,7 +90,10 @@ impl Config {
     pub fn read() -> Result<Self> {
         let args = Args::parse();
 
-        Self::read_from(args.config.as_path())
+        let mut config = Self::read_from(args.config.as_path())?;
+        config.whitelist.preload()?;
+
+        Ok(config)
     }
 
     pub fn read_from(path: &Path) -> Result<Self> {
@@ -113,4 +124,33 @@ fn default_buffer_size() -> usize {
 
 fn default_backfill_concurrency() -> usize {
     10
+}
+
+#[cfg(test)]
+impl Config {
+    pub fn for_test() -> Self {
+        Self {
+            reth: RethConfig {
+                db: PathBuf::from("test-db"),
+                static_files: PathBuf::from("static"),
+            },
+            chain: ChainConfig {
+                chain_id: 31337,
+                start_block: 1,
+            },
+            sync: SyncConfig {
+                buffer_size: 1000,
+                backfill_concurrency: 10,
+            },
+            http: None,
+            db: DbConfig {
+                url: "none".to_owned(),
+            },
+            whitelist: WhitelistConfig::for_test(vec![reth_primitives::Address::from_str(
+                "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+            )
+            .unwrap()]),
+            payment: None,
+        }
+    }
 }

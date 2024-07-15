@@ -1,2 +1,6 @@
+[tasks.test]
+alias = "t"
+run = "cargo test"
+
 [env]
 _.file = ".env"
