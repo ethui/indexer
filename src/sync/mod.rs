@@ -16,7 +16,7 @@ use color_eyre::eyre::{eyre, Result};
 pub use forward::Forward;
 pub use provider::RethProviderFactory;
 use rand::{rngs::StdRng, SeedableRng};
-use reth_primitives::{Header, TransactionSignedNoHash, U256};
+use reth_primitives::Header;
 use reth_provider::{BlockNumReader, BlockReader, ReceiptProvider, TransactionsProvider};
 use scalable_cuckoo_filter::{DefaultHasher, ScalableCuckooFilter, ScalableCuckooFilterBuilder};
 use tokio::time::sleep;
@@ -58,12 +58,6 @@ pub struct Worker<T: std::fmt::Debug> {
 
     /// Cancellation token for graceful shutdown
     cancellation_token: CancellationToken,
-
-    /// Address to which payment must be made to register within the indexer
-    payment_address: Option<Address>,
-
-    /// Minimum payment amount to be considered
-    payment_min_amount: Option<U256>,
 }
 
 /// A match between an address and a transaction
@@ -108,8 +102,6 @@ impl<T: std::fmt::Debug> Worker<T> {
             buffer: Vec::with_capacity(config.sync.buffer_size),
             buffer_capacity: config.sync.buffer_size,
             cancellation_token,
-            payment_address: config.payment.map(|c| c.address),
-            payment_min_amount: config.payment.map(|c| c.min_amount),
         })
     }
 
@@ -175,8 +167,6 @@ impl<T: std::fmt::Debug> Worker<T> {
             let from = tx.recover_signer();
             let to = tx.to();
 
-            self.process_payment(&tx).await?;
-
             from.map(|a| addresses.insert(a));
             to.map(|a| addresses.insert(a));
 
@@ -191,27 +181,6 @@ impl<T: std::fmt::Debug> Worker<T> {
                         hash: tx.hash(),
                     })
                 });
-        }
-
-        Ok(())
-    }
-
-    async fn process_payment(&self, tx: &TransactionSignedNoHash) -> Result<()> {
-        // skip payment check if settings not defined
-        let (payment_address, min_amount) = match (self.payment_address, self.payment_min_amount) {
-            (Some(payment_address), Some(min_amount)) => (payment_address, min_amount),
-            _ => return Ok(()),
-        };
-
-        // skip if transaction has no `from`
-        let from = match tx.recover_signer() {
-            Some(f) => f,
-            _ => return Ok(()),
-        };
-
-        // if this transaction matches a payment
-        if tx.to() == Some(payment_address) && tx.value() >= min_amount {
-            self.db.register(from.into()).await?;
         }
 
         Ok(())

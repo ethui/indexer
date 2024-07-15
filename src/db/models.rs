@@ -41,6 +41,7 @@ pub struct Chain {
     pub chain_id: i32,
     pub start_block: i32,
     pub last_known_block: i32,
+    #[allow(dead_code)]
     pub updated_at: chrono::NaiveDateTime,
 }
 

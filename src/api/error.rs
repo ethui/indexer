@@ -8,6 +8,9 @@ pub enum ApiError {
     #[error("Invalid Credentials")]
     InvalidCredentials,
 
+    #[error("Not Registered")]
+    NotRegistered,
+
     #[error(transparent)]
     Jsonwebtoken(#[from] jsonwebtoken::errors::Error),
 
@@ -20,7 +23,9 @@ pub type ApiResult<T> = Result<T, ApiError>;
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let status_code = match self {
-            ApiError::InvalidCredentials | ApiError::Jsonwebtoken(_) => StatusCode::UNAUTHORIZED,
+            ApiError::NotRegistered | ApiError::InvalidCredentials | ApiError::Jsonwebtoken(_) => {
+                StatusCode::UNAUTHORIZED
+            }
             ApiError::Unknown(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 

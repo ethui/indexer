@@ -40,6 +40,7 @@ impl From<Claims> for IndexerAuth {
 }
 
 impl IndexerAuth {
+    #[allow(dead_code)]
     pub fn new(address: Address, valid_until: u64) -> Self {
         Self {
             address,

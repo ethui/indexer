@@ -26,6 +26,7 @@ pub struct Config {
 
     pub db: DbConfig,
 
+    #[allow(dead_code)]
     pub payment: Option<PaymentConfig>,
 }
 
@@ -71,6 +72,7 @@ pub struct DbConfig {
 }
 
 #[derive(Deserialize, Clone, Debug, Copy)]
+#[allow(dead_code)]
 pub struct PaymentConfig {
     pub address: Address,
     pub min_amount: U256,

@@ -5,7 +5,7 @@ use axum::{
     routing::{get, post},
     Extension, Json, Router,
 };
-use ethers_core::types::Signature;
+use ethers_core::types::{Address, Signature};
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -14,6 +14,7 @@ use tower_http::cors::CorsLayer;
 use super::{
     auth::{Claims, IndexerAuth},
     error::{ApiError, ApiResult},
+    registration::RegistrationProof,
 };
 use crate::db::Db;
 
@@ -27,7 +28,8 @@ pub fn app(db: Db, jwt_secret: String) -> Router {
 
     let public_routes = Router::new()
         .route("/health", get(health))
-        .route("/auth", post(auth));
+        .route("/auth", post(auth))
+        .route("/register", post(register));
 
     Router::new()
         .nest("/api", protected_routes)
@@ -40,6 +42,30 @@ pub fn app(db: Db, jwt_secret: String) -> Router {
 
 async fn health() -> impl IntoResponse {}
 
+pub async fn test() -> impl IntoResponse {
+    Json(json!({"foo": "bar"}))
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct RegisterRequest {
+    address: Address,
+    proof: RegistrationProof,
+}
+
+// POST /api/register
+pub async fn register(
+    State(db): State<Db>,
+    Json(register): Json<RegisterRequest>,
+) -> ApiResult<impl IntoResponse> {
+    register.proof.validate(register.address).await?;
+
+    // TODO this registration needs to be verified (is the user whitelisted? did the user pay?)
+    db.register(register.address.into()).await?;
+
+    // Send the authorized token
+    Ok(Json(json!({"result": "success"})))
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuthRequest {
     signature: Signature,
@@ -51,10 +77,7 @@ pub struct AuthResponse {
     access_token: String,
 }
 
-pub async fn test() -> impl IntoResponse {
-    Json(json!({"foo": "bar"}))
-}
-
+// POST /api/auth
 pub async fn auth(
     Extension(encoding_key): Extension<EncodingKey>,
     State(db): State<Db>,
@@ -64,8 +87,10 @@ pub async fn auth(
         .check(&auth.signature)
         .map_err(|_| ApiError::InvalidCredentials)?;
 
-    // TODO this registration needs to be verified (is the user whitelisted? did the user pay?)
-    db.register(auth.data.address.into()).await?;
+    if !db.is_registered(auth.data.address.into()).await? {
+        return Err(ApiError::NotRegistered);
+    }
+
     let access_token = encode(&Header::default(), &Claims::from(auth.data), &encoding_key)?;
 
     // Send the authorized token
@@ -89,8 +114,9 @@ mod test {
     use super::AuthRequest;
     use crate::{
         api::{
-            app::AuthResponse,
+            app::{AuthResponse, RegisterRequest},
             auth::IndexerAuth,
+            registration::RegistrationProof,
             test_utils::{address, now, sign_typed_data, to_json_resp},
         },
         db::Db,
@@ -139,7 +165,16 @@ mod test {
         let valid_until = now + 20 * 60;
         let data = IndexerAuth::new(address, valid_until);
 
-        let req = post(
+        let registration = post(
+            "/api/register",
+            RegisterRequest {
+                address,
+                proof: RegistrationProof::Test,
+            },
+        );
+        app.clone().oneshot(registration).await?;
+
+        let auth = post(
             "/api/auth",
             AuthRequest {
                 signature: sign_typed_data(&data).await?,
@@ -147,7 +182,7 @@ mod test {
             },
         );
 
-        let resp = app.oneshot(req).await?;
+        let resp = app.oneshot(auth).await?;
         assert_eq!(resp.status(), StatusCode::OK);
         Ok(())
     }
@@ -158,6 +193,15 @@ mod test {
     async fn test_auth_twice(#[future(awt)] app: Router, address: Address, now: u64) -> Result<()> {
         let valid_until = now + 20 * 60;
         let data = IndexerAuth::new(address, valid_until);
+
+        let registration = post(
+            "/api/register",
+            RegisterRequest {
+                address,
+                proof: RegistrationProof::Test,
+            },
+        );
+        app.clone().oneshot(registration).await?;
 
         let req = post(
             "/api/auth",
@@ -250,6 +294,15 @@ mod test {
     ) -> Result<()> {
         let valid_until = now + 20;
         let data = IndexerAuth::new(address, valid_until);
+
+        let registration = post(
+            "/api/register",
+            RegisterRequest {
+                address,
+                proof: RegistrationProof::Test,
+            },
+        );
+        app.clone().oneshot(registration).await?;
 
         let req = post(
             "/api/auth",
