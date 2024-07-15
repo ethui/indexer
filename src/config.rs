@@ -103,3 +103,27 @@ fn default_buffer_size() -> usize {
 fn default_backfill_concurrency() -> usize {
     10
 }
+
+#[cfg(test)]
+impl Config {
+    pub fn for_test() -> Self {
+        Self {
+            reth: RethConfig {
+                db: PathBuf::from("test-db"),
+                static_files: PathBuf::from("static"),
+            },
+            chain: ChainConfig {
+                chain_id: 31337,
+                start_block: 1,
+            },
+            sync: SyncConfig {
+                buffer_size: 1000,
+                backfill_concurrency: 10,
+            },
+            http: None,
+            db: DbConfig {
+                url: "none".to_owned(),
+            },
+        }
+    }
+}
