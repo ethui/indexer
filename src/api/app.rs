@@ -24,7 +24,9 @@ pub fn app(jwt_secret: String, state: AppState) -> Router {
     let encoding_key = EncodingKey::from_secret(jwt_secret.as_ref());
     let decoding_key = DecodingKey::from_secret(jwt_secret.as_ref());
 
-    let protected_routes = Router::new().route_layer(from_extractor::<Claims>());
+    let protected_routes = Router::new()
+        .route("/test", post(test))
+        .route_layer(from_extractor::<Claims>());
 
     let public_routes = Router::new()
         .route("/health", get(health))
@@ -41,6 +43,10 @@ pub fn app(jwt_secret: String, state: AppState) -> Router {
 }
 
 async fn health() -> impl IntoResponse {}
+
+pub async fn test() -> impl IntoResponse {
+    Json(json!({"foo": "bar"}))
+}
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct RegisterRequest {
