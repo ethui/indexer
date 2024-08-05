@@ -178,10 +178,7 @@ impl Worker<Backfill> {
     /// if the buffer is sufficiently large, flush it to the database
     /// and update chain tip
     pub async fn maybe_flush(&mut self, last_block: u64) -> Result<()> {
-        self.current_buffer_tries += 1;
-        if self.buffer.len() >= self.buffer_capacity
-            || self.current_buffer_tries > self.max_buffer_tries
-        {
+        if self.buffer.len() >= self.buffer_capacity {
             self.flush(last_block).await?;
         }
 
@@ -194,7 +191,6 @@ impl Worker<Backfill> {
 
         self.db.create_txs(txs).await?;
         self.db.update_job(self.inner.job_id, last_block).await?;
-        self.current_buffer_tries = 0;
 
         Ok(())
     }

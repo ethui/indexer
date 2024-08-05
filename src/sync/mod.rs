@@ -56,12 +56,6 @@ pub struct Worker<T: std::fmt::Debug> {
     /// Desired buffer capacity, and threshold at which to flush it
     buffer_capacity: usize,
 
-    /// How many times to check buffer capacity before forcing a flush
-    max_buffer_tries: usize,
-
-    /// How many tries since last flush
-    current_buffer_tries: usize,
-
     /// Cancellation token for graceful shutdown
     cancellation_token: CancellationToken,
 }
@@ -107,8 +101,6 @@ impl<T: std::fmt::Debug> Worker<T> {
             cuckoo,
             buffer: Vec::with_capacity(config.sync.buffer_size),
             buffer_capacity: config.sync.buffer_size,
-            max_buffer_tries: config.sync.buffer_tries,
-            current_buffer_tries: 0,
             cancellation_token,
         })
     }

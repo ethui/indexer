@@ -88,10 +88,7 @@ impl Worker<Forward> {
     /// if the buffer is sufficiently large, flush it to the database
     /// and update chain tip
     pub async fn maybe_flush(&mut self) -> Result<()> {
-        self.current_buffer_tries += 1;
-        if self.buffer.len() >= self.buffer_capacity
-            || self.current_buffer_tries > self.max_buffer_tries
-        {
+        if self.buffer.len() >= self.buffer_capacity {
             self.flush().await?;
         }
 
@@ -106,7 +103,6 @@ impl Worker<Forward> {
         self.db
             .update_chain(self.chain.chain_id as u64, self.inner.next_block)
             .await?;
-        self.current_buffer_tries = 0;
 
         Ok(())
     }
