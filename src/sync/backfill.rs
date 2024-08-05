@@ -105,7 +105,7 @@ impl BackfillManager {
                 // wait for new jobs too, which should be a sign to reorg
                 // request each job to stop
                 StopStrategy::Token(token) => {
-                    let timeout = sleep(Duration::from_secs(10 * 60));
+                    let timeout = sleep(Duration::from_secs(1));
                     select! {
                         _ = token.cancelled() => {}
                         _ = timeout => {}
@@ -115,7 +115,12 @@ impl BackfillManager {
                     for worker in workers {
                         worker.await.unwrap().unwrap();
                     }
-                    info!("closing backfill manager");
+
+                    // if we stopped because cancelation token was triggered, end the job for good
+                    if token.is_cancelled() {
+                        info!("closing backfill manager");
+                        break;
+                    }
                 }
 
                 // if we stop on finish, no need to do anything here
@@ -147,12 +152,19 @@ impl SyncJob for Worker<Backfill> {
             let provider = self.provider_factory.get()?;
             // start by checking shutdown signal
             if self.cancellation_token.is_cancelled() {
-                break;
+                // the final flush after the loop would skip all the blocks we canceled
+                // so we flush with the current block instead
+                self.flush(block).await?;
+                return Ok(());
             }
 
             let header = provider.header_by_number(block)?.unwrap();
             self.process_block(&header).await?;
             self.maybe_flush(block).await?;
+
+            if block % 10 == 0 {
+                tokio::task::yield_now().await;
+            }
         }
 
         self.flush(self.inner.low).await?;

@@ -60,6 +60,7 @@ async fn main() -> Result<()> {
 
     // termination handling
     signal::ctrl_c().await?;
+    info!("graceful shutdown initiated...");
     token.cancel();
     tracker.close();
     tracker.wait().await;
