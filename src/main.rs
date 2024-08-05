@@ -55,6 +55,9 @@ async fn main() -> Result<()> {
     // spawn and track tasks
     let tracker = TaskTracker::new();
     tracker.spawn(sync.run());
+    // let bck = backfill.run();
+
+    dbg!("spawned");
     tracker.spawn(backfill.run());
     api.map(|t| tracker.spawn(t));
 
@@ -71,15 +74,16 @@ async fn main() -> Result<()> {
 
 fn setup() -> Result<()> {
     color_eyre::install()?;
+    // console_subscriber::init();
 
-    let filter = EnvFilter::from_default_env();
-
-    let subscriber = tracing_subscriber::FmtSubscriber::builder()
-        .with_env_filter(filter)
-        .with_span_events(FmtSpan::NEW)
-        .compact()
-        .finish();
-    tracing::subscriber::set_global_default(subscriber)?;
+    // let filter = EnvFilter::from_default_env();
+    //
+    // let subscriber = tracing_subscriber::FmtSubscriber::builder()
+    //     .with_env_filter(filter)
+    //     .with_span_events(FmtSpan::NEW)
+    //     .compact()
+    //     .finish();
+    // tracing::subscriber::set_global_default(subscriber)?;
 
     Ok(())
 }

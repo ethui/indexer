@@ -74,11 +74,11 @@ impl BackfillManager {
             self.db.reorg_backfill_jobs().await?;
             let jobs = self.db.get_backfill_jobs().await?;
 
+            dbg!("here on finish");
             if self.stop.is_on_finish() && jobs.is_empty() {
-                dbg!("breaking");
+                dbg!("break");
                 break;
             }
-            dbg!(&jobs);
 
             let workers = jobs
                 .into_iter()
@@ -96,13 +96,12 @@ impl BackfillManager {
                         let worker = Backfill::new_worker(db, config, job, factory, token)
                             .await
                             .unwrap();
-                        dbg!(&worker);
                         worker.run().await
                     })
                 })
                 .collect::<Vec<_>>();
 
-            dbg!(&self.stop);
+            dbg!("here", workers.len(), &self.stop);
             // wait for a new job, or a preset delay, whichever comes first
             match &self.stop {
                 // stop when cancellation token signals
@@ -111,11 +110,11 @@ impl BackfillManager {
                 StopStrategy::Token(token) => {
                     let timeout = sleep(Duration::from_secs(1));
                     select! {
-                        _ = token.cancelled() => {dbg!("cancelled");}
-                        _ = timeout => {dbg!("timeout");}
+                        _ = token.cancelled() => {}
+                        _ = timeout => {}
                         Some(_) = self.jobs_rcv.recv() => {}
                     }
-                    dbg!("signal");
+                    dbg!("canceling");
                     inner_cancel.cancel();
                     for worker in workers {
                         worker.await.unwrap().unwrap();
@@ -149,6 +148,7 @@ impl SyncJob for Worker<Backfill> {
     #[instrument(skip(self), fields(chain_id = self.chain.chain_id))]
     async fn run(mut self) -> Result<()> {
         for block in (self.inner.low..self.inner.high).rev() {
+            dbg!(block);
             let provider = self.provider_factory.get()?;
             // start by checking shutdown signal
             if self.cancellation_token.is_cancelled() {
