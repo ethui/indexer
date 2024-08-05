@@ -23,8 +23,5 @@ pub async fn start(db: Db, config: Config) -> JoinHandle<Result<(), std::io::Err
     let state = AppState { db, config };
     let app = app(http_config.jwt_secret(), state);
 
-    tokio::spawn(async move {
-        dbg!("listener");
-        axum::serve(listener, app).await
-    })
+    tokio::spawn(async move { axum::serve(listener, app).await })
 }

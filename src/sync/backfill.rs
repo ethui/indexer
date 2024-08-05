@@ -74,9 +74,7 @@ impl BackfillManager {
             self.db.reorg_backfill_jobs().await?;
             let jobs = self.db.get_backfill_jobs().await?;
 
-            dbg!("here on finish");
             if self.stop.is_on_finish() && jobs.is_empty() {
-                dbg!("break");
                 break;
             }
 
@@ -101,7 +99,6 @@ impl BackfillManager {
                 })
                 .collect::<Vec<_>>();
 
-            dbg!("here", workers.len(), &self.stop);
             // wait for a new job, or a preset delay, whichever comes first
             match &self.stop {
                 // stop when cancellation token signals
@@ -114,12 +111,16 @@ impl BackfillManager {
                         _ = timeout => {}
                         Some(_) = self.jobs_rcv.recv() => {}
                     }
-                    dbg!("canceling");
                     inner_cancel.cancel();
                     for worker in workers {
                         worker.await.unwrap().unwrap();
                     }
-                    info!("closing backfill manager");
+
+                    // if we stopped because cancelation token was triggered, end the job for good
+                    if token.is_cancelled() {
+                        info!("closing backfill manager");
+                        break;
+                    }
                 }
 
                 // if we stop on finish, no need to do anything here
@@ -148,16 +149,22 @@ impl SyncJob for Worker<Backfill> {
     #[instrument(skip(self), fields(chain_id = self.chain.chain_id))]
     async fn run(mut self) -> Result<()> {
         for block in (self.inner.low..self.inner.high).rev() {
-            dbg!(block);
             let provider = self.provider_factory.get()?;
             // start by checking shutdown signal
             if self.cancellation_token.is_cancelled() {
-                break;
+                // the final flush after the loop would skip all the blocks we canceled
+                // so we flush with the current block instead
+                self.flush(block).await?;
+                return Ok(());
             }
 
             let header = provider.header_by_number(block)?.unwrap();
             self.process_block(&header).await?;
             self.maybe_flush(block).await?;
+
+            if block % 10 == 0 {
+                tokio::task::yield_now().await;
+            }
         }
 
         self.flush(self.inner.low).await?;
@@ -171,7 +178,10 @@ impl Worker<Backfill> {
     /// if the buffer is sufficiently large, flush it to the database
     /// and update chain tip
     pub async fn maybe_flush(&mut self, last_block: u64) -> Result<()> {
-        if self.buffer.len() >= self.buffer_capacity {
+        self.current_buffer_tries += 1;
+        if self.buffer.len() >= self.buffer_capacity
+            || self.current_buffer_tries > self.max_buffer_tries
+        {
             self.flush(last_block).await?;
         }
 
@@ -184,6 +194,7 @@ impl Worker<Backfill> {
 
         self.db.create_txs(txs).await?;
         self.db.update_job(self.inner.job_id, last_block).await?;
+        self.current_buffer_tries = 0;
 
         Ok(())
     }

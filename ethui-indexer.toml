@@ -4,7 +4,7 @@ static_files = "/mnt/data/eth/sepolia/reth/static_files"
 
 [chain]
 chain_id = 11155111
-start_block = 4700000
+start_block = 4500000
 
 [sync]
 buffer_size = 1000

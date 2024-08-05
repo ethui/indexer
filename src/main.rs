@@ -63,6 +63,7 @@ async fn main() -> Result<()> {
 
     // termination handling
     signal::ctrl_c().await?;
+    info!("graceful shutdown initiated...");
     token.cancel();
     tracker.close();
     tracker.wait().await;
@@ -74,16 +75,15 @@ async fn main() -> Result<()> {
 
 fn setup() -> Result<()> {
     color_eyre::install()?;
-    // console_subscriber::init();
 
-    // let filter = EnvFilter::from_default_env();
-    //
-    // let subscriber = tracing_subscriber::FmtSubscriber::builder()
-    //     .with_env_filter(filter)
-    //     .with_span_events(FmtSpan::NEW)
-    //     .compact()
-    //     .finish();
-    // tracing::subscriber::set_global_default(subscriber)?;
+    let filter = EnvFilter::from_default_env();
+
+    let subscriber = tracing_subscriber::FmtSubscriber::builder()
+        .with_env_filter(filter)
+        .with_span_events(FmtSpan::NEW)
+        .compact()
+        .finish();
+    tracing::subscriber::set_global_default(subscriber)?;
 
     Ok(())
 }

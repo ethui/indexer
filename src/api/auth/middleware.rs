@@ -23,7 +23,6 @@ where
         let Extension(key) = Extension::<DecodingKey>::from_request_parts(parts, state)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        dbg!("key");
 
         // Extract the token from the authorization header
         let TypedHeader(Authorization(bearer)) = parts
@@ -32,12 +31,8 @@ where
             .map_err(|_| StatusCode::UNAUTHORIZED)?;
 
         // Decode the user data
-        let token_data = dbg!(decode::<Claims>(
-            bearer.token(),
-            &key,
-            &Validation::default()
-        ))
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+        let token_data = decode::<Claims>(bearer.token(), &key, &Validation::default())
+            .map_err(|_| StatusCode::UNAUTHORIZED)?;
 
         // TODO do we need to verify the claim is not expired?
 

@@ -51,6 +51,9 @@ pub struct SyncConfig {
     #[serde(default = "default_buffer_size")]
     pub buffer_size: usize,
 
+    #[serde(default = "default_buffer_tries")]
+    pub buffer_tries: usize,
+
     #[serde(default = "default_backfill_concurrency")]
     pub backfill_concurrency: usize,
 }
@@ -110,6 +113,10 @@ fn default_buffer_size() -> usize {
     1000
 }
 
+fn default_buffer_tries() -> usize {
+    1000
+}
+
 fn default_backfill_concurrency() -> usize {
     10
 }
@@ -128,6 +135,7 @@ impl Config {
             },
             sync: SyncConfig {
                 buffer_size: 1000,
+                buffer_tries: 1000,
                 backfill_concurrency: 10,
             },
             http: None,
