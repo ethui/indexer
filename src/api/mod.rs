@@ -5,24 +5,36 @@ mod error;
 mod registration;
 mod test_utils;
 
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 use tokio::task::JoinHandle;
 use tracing::instrument;
 
 use self::{app::app, app_state::AppState};
-use crate::{config::Config, db::Db};
+use crate::{config::Config, db::Db, sync::RethProviderFactory};
 
 #[allow(clippy::async_yields_async)]
 #[instrument(name = "api", skip(db, config), fields(port = config.http.clone().unwrap().port))]
-pub async fn start(db: Db, config: Config) -> JoinHandle<Result<(), std::io::Error>> {
+pub async fn start(
+    db: Db,
+    config: Config,
+    provider_factory: Arc<RethProviderFactory>,
+) -> JoinHandle<Result<(), std::io::Error>> {
     let http_config = config.http.clone().unwrap();
 
+    dbg!("here1");
     let addr = SocketAddr::from(([0, 0, 0, 0], http_config.port));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
-    let state = AppState { db, config };
+    dbg!("here2");
+    let state = AppState {
+        db,
+        config,
+        provider_factory,
+    };
+    dbg!("here3");
     let app = app(http_config.jwt_secret(), state);
+    dbg!("here");
 
     tokio::spawn(async move { axum::serve(listener, app).await })
 }

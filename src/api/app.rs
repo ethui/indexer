@@ -56,14 +56,14 @@ pub struct RegisterRequest {
 
 // POST /api/register
 pub async fn register(
-    State(AppState { db, config }): State<AppState>,
+    State(state): State<AppState>,
     Json(register): Json<RegisterRequest>,
 ) -> ApiResult<impl IntoResponse> {
     let addr = reth_primitives::Address::from_str(&format!("0x{:x}", register.address)).unwrap();
 
-    register.proof.validate(addr, &db, &config).await?;
+    register.proof.validate(addr, &state).await?;
 
-    db.register(register.address.into()).await?;
+    state.db.register(register.address.into()).await?;
 
     Ok(Json(json!({"result": "success"})))
 }

@@ -1,8 +1,9 @@
 use color_eyre::{eyre::eyre, Result};
 use reth_primitives::{Address, TxHash};
+use reth_provider::ReceiptProvider as _;
 use serde::{Deserialize, Serialize};
 
-use crate::{config::Config, db::Db};
+use super::app_state::AppState;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -16,15 +17,18 @@ pub enum RegistrationProof {
 
 #[allow(unused)]
 impl RegistrationProof {
-    pub async fn validate(&self, address: Address, db: &Db, config: &Config) -> Result<()> {
+    pub async fn validate(&self, address: Address, state: &AppState) -> Result<()> {
         match self {
             Self::Whitelist => {
-                if !config.whitelist.is_whitelisted(&address) {
+                if !state.config.whitelist.is_whitelisted(&address) {
                     return Err(eyre!("Not Whitelisted"));
                 }
             }
 
-            Self::TxHash(_hash) => {
+            Self::TxHash(hash) => {
+                let provider = state.provider_factory.get()?;
+                let receipt = provider.receipt_by_hash(*hash)?;
+                dbg!(receipt);
                 todo!()
             }
 

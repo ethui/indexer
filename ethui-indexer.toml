@@ -1,6 +1,7 @@
 [reth]
 db = "/mnt/data/eth/sepolia/reth/db"
 static_files = "/mnt/data/eth/sepolia/reth/static_files"
+rpc_url = "http://localhost:8545"
 
 [chain]
 chain_id = 11155111

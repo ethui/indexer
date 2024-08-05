@@ -43,20 +43,22 @@ async fn main() -> Result<()> {
         token.clone(),
     )
     .await?;
-    let backfill = BackfillManager::new(
-        db.clone(),
-        &config,
-        provider_factory.clone(),
-        job_rx,
-        StopStrategy::Token(token.clone()),
-    );
-    let api = config.clone().http.map(|_| api::start(db.clone(), config));
+    // let backfill = BackfillManager::new(
+    //     db.clone(),
+    //     &config,
+    //     provider_factory.clone(),
+    //     job_rx,
+    //     StopStrategy::Token(token.clone()),
+    // );
+    let api = config
+        .clone()
+        .http
+        .map(|_| api::start(db.clone(), config, provider_factory.clone()));
 
     // spawn and track tasks
     let tracker = TaskTracker::new();
     tracker.spawn(sync.run());
-    tracker.spawn(backfill.run());
-    api.map(|t| tracker.spawn(t));
+    // tracker.spawn(backfill.run());
 
     // termination handling
     signal::ctrl_c().await?;
