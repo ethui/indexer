@@ -43,13 +43,13 @@ async fn main() -> Result<()> {
         token.clone(),
     )
     .await?;
-    // let backfill = BackfillManager::new(
-    //     db.clone(),
-    //     &config,
-    //     provider_factory.clone(),
-    //     job_rx,
-    //     StopStrategy::Token(token.clone()),
-    // );
+    let backfill = BackfillManager::new(
+        db.clone(),
+        &config,
+        provider_factory.clone(),
+        job_rx,
+        StopStrategy::Token(token.clone()),
+    );
     let api = config
         .clone()
         .http
@@ -58,7 +58,8 @@ async fn main() -> Result<()> {
     // spawn and track tasks
     let tracker = TaskTracker::new();
     tracker.spawn(sync.run());
-    // tracker.spawn(backfill.run());
+    tracker.spawn(backfill.run());
+    api.map(|t| tracker.spawn(t));
 
     // termination handling
     signal::ctrl_c().await?;

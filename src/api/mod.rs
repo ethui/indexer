@@ -22,19 +22,15 @@ pub async fn start(
 ) -> JoinHandle<Result<(), std::io::Error>> {
     let http_config = config.http.clone().unwrap();
 
-    dbg!("here1");
     let addr = SocketAddr::from(([0, 0, 0, 0], http_config.port));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
-    dbg!("here2");
     let state = AppState {
         db,
         config,
         provider_factory,
     };
-    dbg!("here3");
     let app = app(http_config.jwt_secret(), state);
-    dbg!("here");
 
     tokio::spawn(async move { axum::serve(listener, app).await })
 }
