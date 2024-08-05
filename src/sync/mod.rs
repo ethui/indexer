@@ -164,11 +164,8 @@ impl<T: std::fmt::Debug> Worker<T> {
                 })
                 .collect();
 
-            let from = tx.recover_signer();
-            let to = tx.to();
-
-            from.map(|a| addresses.insert(a));
-            to.map(|a| addresses.insert(a));
+            tx.recover_signer().map(|a| addresses.insert(a));
+            tx.to().map(|a| addresses.insert(a));
 
             addresses
                 .into_iter()
