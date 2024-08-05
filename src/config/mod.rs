@@ -128,7 +128,6 @@ impl Config {
             },
             sync: SyncConfig {
                 buffer_size: 1000,
-                buffer_tries: 1000,
                 backfill_concurrency: 10,
             },
             http: None,
