@@ -55,9 +55,6 @@ async fn main() -> Result<()> {
     // spawn and track tasks
     let tracker = TaskTracker::new();
     tracker.spawn(sync.run());
-    // let bck = backfill.run();
-
-    dbg!("spawned");
     tracker.spawn(backfill.run());
     api.map(|t| tracker.spawn(t));
 
