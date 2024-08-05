@@ -3,7 +3,7 @@ db = "/mnt/data/eth/sepolia/reth/db"
 
 [chain]
 chain_id = 11155111
-start_block = 4800000
+start_block = 4700000
 
 [sync]
 buffer_size = 10000
