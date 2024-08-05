@@ -75,8 +75,10 @@ impl BackfillManager {
             let jobs = self.db.get_backfill_jobs().await?;
 
             if self.stop.is_on_finish() && jobs.is_empty() {
+                dbg!("breaking");
                 break;
             }
+            dbg!(&jobs);
 
             let workers = jobs
                 .into_iter()
@@ -94,23 +96,26 @@ impl BackfillManager {
                         let worker = Backfill::new_worker(db, config, job, factory, token)
                             .await
                             .unwrap();
+                        dbg!(&worker);
                         worker.run().await
                     })
                 })
                 .collect::<Vec<_>>();
 
+            dbg!(&self.stop);
             // wait for a new job, or a preset delay, whichever comes first
             match &self.stop {
                 // stop when cancellation token signals
                 // wait for new jobs too, which should be a sign to reorg
                 // request each job to stop
                 StopStrategy::Token(token) => {
-                    let timeout = sleep(Duration::from_secs(10 * 60));
+                    let timeout = sleep(Duration::from_secs(1));
                     select! {
-                        _ = token.cancelled() => {}
-                        _ = timeout => {}
+                        _ = token.cancelled() => {dbg!("cancelled");}
+                        _ = timeout => {dbg!("timeout");}
                         Some(_) = self.jobs_rcv.recv() => {}
                     }
+                    dbg!("signal");
                     inner_cancel.cancel();
                     for worker in workers {
                         worker.await.unwrap().unwrap();
