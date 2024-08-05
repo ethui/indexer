@@ -1,3 +1,7 @@
+[tasks.run]
+alias = "r"
+run = "cargo run -- --config ethui-indexer.toml"
+
 [tasks.test]
 alias = "t"
 run = "cargo test"

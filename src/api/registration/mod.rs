@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{config::Config, db::Db};
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum RegistrationProof {
     Whitelist,
     TxHash(TxHash),
