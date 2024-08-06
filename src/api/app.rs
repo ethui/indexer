@@ -102,6 +102,8 @@ pub async fn auth(
 #[cfg(test)]
 mod test {
 
+    use std::sync::Arc;
+
     use axum::{
         body::Body,
         http::{Request, StatusCode},
@@ -125,6 +127,7 @@ mod test {
         },
         config::Config,
         db::Db,
+        sync::RethProviderFactory,
     };
 
     fn get(uri: &str) -> Request<Body> {
@@ -158,10 +161,14 @@ mod test {
     async fn build_app() -> Router {
         let jwt_secret = "secret".to_owned();
         let db = Db::connect_test().await.unwrap();
+        let config = Config::for_test();
+        let chain = db.setup_chain(&config.chain).await.unwrap();
+        let provider_factory = Arc::new(RethProviderFactory::new(&config, &chain).unwrap());
 
         let state = AppState {
             db,
-            config: Config::for_test(),
+            config,
+            provider_factory,
         };
 
         super::app(jwt_secret, state)
