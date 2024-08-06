@@ -6,5 +6,5 @@ use crate::{config::Config, db::Db, sync::RethProviderFactory};
 pub struct AppState {
     pub db: Db,
     pub config: Config,
-    pub provider_factory: Arc<RethProviderFactory>,
+    pub provider_factory: Option<Arc<RethProviderFactory>>,
 }

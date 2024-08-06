@@ -26,7 +26,7 @@ impl RegistrationProof {
             }
 
             Self::TxHash(hash) => {
-                let provider = state.provider_factory.get()?;
+                let provider = state.provider_factory.unwrap().get()?;
                 match provider.transaction_by_hash(*hash)? {
                     Some(tx) => self.validate_tx(address, state, &tx)?,
                     None => return Err(eyre!("Transaction not found")),

@@ -162,13 +162,11 @@ mod test {
         let jwt_secret = "secret".to_owned();
         let db = Db::connect_test().await.unwrap();
         let config = Config::for_test();
-        let chain = db.setup_chain(&config.chain).await.unwrap();
-        let provider_factory = Arc::new(RethProviderFactory::new(&config, &chain).unwrap());
 
         let state = AppState {
             db,
             config,
-            provider_factory,
+            provider_factory: None,
         };
 
         super::app(jwt_secret, state)
