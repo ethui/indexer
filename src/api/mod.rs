@@ -28,7 +28,7 @@ pub async fn start(
     let state = AppState {
         db,
         config,
-        provider_factory,
+        provider_factory: Some(provider_factory),
     };
     let app = app(http_config.jwt_secret(), state);
 
