@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Eip712, EthAbiType, Serialize, Deserialize)]
 #[eip712(
-    name = "ethui",
+    name = "ethui-indexer",
     version = "1",
     chain_id = 1,
     verifying_contract = "0x0000000000000000000000000000000000000000"
@@ -51,9 +51,15 @@ impl IndexerAuth {
     }
 
     pub fn check(&self, signature: &Signature) -> Result<()> {
+        dbg!("here");
         self.check_expiration()?;
+        dbg!("here2");
         let hash = self.encode_eip712()?;
+        dbg!(self);
+        dbg!(&hash);
+        dbg!(signature.recover(hash)?);
         signature.verify(hash, self.address)?;
+        dbg!("here3");
 
         Ok(())
     }
@@ -137,7 +143,7 @@ mod test {
           },
           "primaryType": "IndexerAuth",
           "domain": {
-            "name": "ethui",
+            "name": "ethui-indexer",
             "version": "1",
             "chainId": 1,
             "verifyingContract": "0x0000000000000000000000000000000000000000",

@@ -1,0 +1,37 @@
+{
+	"types": {
+		"EIP712Domain": [
+			{
+				"name": "name",
+				"type": "string"
+			},
+			{
+				"name": "version",
+				"type": "string"
+			},
+			{
+				"name": "chainId",
+				"type": "uint256"
+			},
+			{
+				"name": "verifyingContract",
+				"type": "address"
+			}
+		],
+		"IndexerAuth": [
+			{ "name": "address", "type": "address" },
+			{ "name": "validUntil", "type": "uint64" }
+		]
+	},
+	"domain": {
+		"name": "ethui-indexer",
+		"version": "1",
+		"chainId": 11155111,
+		"verifyingContract": "0x0000000000000000000000000000000000000000"
+	},
+	"primaryType": "IndexerAuth",
+	"message": {
+		"address": "0x0077014b4C74d9b1688847386B24Ed23Fdf14Be8",
+		"validUntil": 1754484924
+	}
+}

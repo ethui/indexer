@@ -7,6 +7,7 @@ use axum::{
     routing::{get, post},
     Extension, Json, Router,
 };
+use color_eyre::eyre::eyre;
 use ethers_core::types::{Address, Signature};
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
@@ -25,7 +26,7 @@ pub fn app(jwt_secret: String, state: AppState) -> Router {
     let decoding_key = DecodingKey::from_secret(jwt_secret.as_ref());
 
     let protected_routes = Router::new()
-        .route("/test", post(test))
+        .route("/txs", post(test))
         .route_layer(from_extractor::<Claims>());
 
     let public_routes = Router::new()
@@ -44,7 +45,7 @@ pub fn app(jwt_secret: String, state: AppState) -> Router {
 
 async fn health() -> impl IntoResponse {}
 
-pub async fn test() -> impl IntoResponse {
+pub async fn test(State(_state): State<AppState>) -> impl IntoResponse {
     Json(json!({"foo": "bar"}))
 }
 
@@ -70,7 +71,7 @@ pub async fn register(
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuthRequest {
-    signature: Signature,
+    signature: String,
     data: IndexerAuth,
 }
 
@@ -85,8 +86,9 @@ pub async fn auth(
     State(AppState { db, .. }): State<AppState>,
     Json(auth): Json<AuthRequest>,
 ) -> ApiResult<impl IntoResponse> {
+    let sig = Signature::from_str(&auth.signature).map_err(|_| eyre!("Invalid signature"))?;
     auth.data
-        .check(&auth.signature)
+        .check(&sig)
         .map_err(|_| ApiError::InvalidCredentials)?;
 
     if !db.is_registered(auth.data.address.into()).await? {
@@ -101,8 +103,6 @@ pub async fn auth(
 
 #[cfg(test)]
 mod test {
-
-    use std::sync::Arc;
 
     use axum::{
         body::Body,
@@ -127,7 +127,6 @@ mod test {
         },
         config::Config,
         db::Db,
-        sync::RethProviderFactory,
     };
 
     fn get(uri: &str) -> Request<Body> {
@@ -210,7 +209,7 @@ mod test {
         let auth = post(
             "/api/auth",
             AuthRequest {
-                signature: sign_typed_data(&data).await?,
+                signature: sign_typed_data(&data).await?.to_string(),
                 data,
             },
         );
@@ -240,14 +239,14 @@ mod test {
         let req = post(
             "/api/auth",
             AuthRequest {
-                signature: sign_typed_data(&data).await?,
+                signature: sign_typed_data(&data).await?.to_string(),
                 data: data.clone(),
             },
         );
         let req2 = post(
             "/api/auth",
             AuthRequest {
-                signature: sign_typed_data(&data).await?,
+                signature: sign_typed_data(&data).await?.to_string(),
                 data,
             },
         );
@@ -271,7 +270,7 @@ mod test {
         let req = post(
             "/api/auth",
             AuthRequest {
-                signature: sign_typed_data(&data).await?,
+                signature: sign_typed_data(&data).await?.to_string(),
                 data,
             },
         );
@@ -293,7 +292,7 @@ mod test {
         let req = post(
             "/api/auth",
             AuthRequest {
-                signature: sign_typed_data(&invalid_data).await?,
+                signature: sign_typed_data(&invalid_data).await?.to_string(),
                 data,
             },
         );
@@ -334,7 +333,7 @@ mod test {
         let req = post(
             "/api/auth",
             AuthRequest {
-                signature: sign_typed_data(&data).await?,
+                signature: sign_typed_data(&data).await?.to_string(),
                 data,
             },
         );
