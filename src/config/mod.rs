@@ -31,6 +31,7 @@ pub struct Config {
 
     pub db: DbConfig,
     pub whitelist: WhitelistConfig,
+    pub payment: Option<PaymentConfig>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -61,6 +62,12 @@ pub struct HttpConfig {
     pub port: u16,
 
     pub jwt_secret_env: String,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct PaymentConfig {
+    pub address: reth_primitives::Address,
+    pub min_amount: alloy_primitives::U256,
 }
 
 impl HttpConfig {
@@ -134,6 +141,7 @@ impl Config {
             db: DbConfig {
                 url: "none".to_owned(),
             },
+            payment: None,
             whitelist: WhitelistConfig::for_test(vec![reth_primitives::Address::from_str(
                 "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
             )

@@ -180,6 +180,23 @@ impl Db {
         handle_error(res).await
     }
 
+    /// Checks if an account is registered
+    #[instrument(skip(self))]
+    pub async fn is_registered(&self, address: Address) -> Result<bool> {
+        use schema::accounts::dsl;
+
+        let mut conn = self.pool.get().await?;
+
+        let res: i64 = schema::accounts::table
+            .filter(dsl::address.eq(&address))
+            .filter(dsl::chain_id.eq(self.chain_id))
+            .count()
+            .get_result(&mut conn)
+            .await?;
+
+        Ok(res > 0)
+    }
+
     pub async fn get_addresses(&self) -> Result<Vec<Address>> {
         use schema::accounts::dsl;
         let mut conn = self.pool.get().await?;

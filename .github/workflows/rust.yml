@@ -54,7 +54,7 @@ jobs:
 
       - run: cargo test
         env:
-          TEST_DATABASE_URL: "postgres://postgres:postgres@localhost/db"
+          TEST_DATABASE_URL: "postgres://postgres:postgres@localhost/test-db"
 
   cargo-deny:
     runs-on: ubuntu-latest
