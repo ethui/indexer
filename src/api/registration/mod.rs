@@ -50,7 +50,7 @@ impl RegistrationProof {
             return Err(eyre!("Transaction origin does not match given address"));
         }
 
-        let Some(payment_config) = state.config.payment else {
+        let Some(ref payment_config) = state.config.payment else {
             return Ok(());
         };
 
