@@ -6,7 +6,6 @@ use std::str::FromStr;
 
 use clap::Parser;
 use color_eyre::eyre::Result;
-use reth_primitives::{Address, U256};
 use serde::Deserialize;
 
 pub use self::whitelist::WhitelistConfig;
@@ -31,14 +30,10 @@ pub struct Config {
     pub http: Option<HttpConfig>,
 
     pub db: DbConfig,
-
-    #[allow(dead_code)]
-    pub payment: Option<PaymentConfig>,
-
     pub whitelist: WhitelistConfig,
 }
 
-#[derive(Deserialize, Clone, Debug, Default)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct RethConfig {
     pub db: PathBuf,
     pub static_files: PathBuf,
@@ -77,13 +72,6 @@ impl HttpConfig {
 #[derive(Deserialize, Clone, Debug)]
 pub struct DbConfig {
     pub url: String,
-}
-
-#[derive(Deserialize, Clone, Debug, Copy)]
-#[allow(dead_code)]
-pub struct PaymentConfig {
-    pub address: Address,
-    pub min_amount: U256,
 }
 
 impl Config {
@@ -150,7 +138,6 @@ impl Config {
                 "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
             )
             .unwrap()]),
-            payment: None,
         }
     }
 }
