@@ -28,7 +28,7 @@ pub fn app(jwt_secret: String, state: AppState) -> Router {
     let decoding_key = DecodingKey::from_secret(jwt_secret.as_ref());
 
     let protected_routes = Router::new()
-        .route("/txs", post(test))
+        .route("/test", post(test))
         .route_layer(from_extractor::<Claims>());
 
     let public_routes = Router::new()

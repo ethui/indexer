@@ -3,7 +3,7 @@ use reth_db::{
     mdbx::{tx::Tx, RO},
     open_db_read_only, DatabaseEnv,
 };
-use reth_provider::{DatabaseProvider, ProviderFactory};
+use reth_provider::{providers::StaticFileProvider, DatabaseProvider, ProviderFactory};
 
 use crate::{config::Config, db::models::Chain};
 
@@ -24,13 +24,15 @@ impl RethProviderFactory {
         let db = open_db_read_only(&config.db, Default::default())?;
 
         let spec = match chain_id {
-            1 => (*reth_primitives::MAINNET).clone(),
-            11155111 => (*reth_primitives::SEPOLIA).clone(),
+            1 => (*reth_chainspec::MAINNET).clone(),
+            11155111 => (*reth_chainspec::SEPOLIA).clone(),
             _ => return Err(eyre::eyre!("unsupported chain id {}", chain_id)),
         };
 
+        let static_file_provider = StaticFileProvider::read_only(config.static_files.clone())?;
+
         let factory: ProviderFactory<reth_db::DatabaseEnv> =
-            ProviderFactory::new(db, spec, config.static_files.clone())?;
+            ProviderFactory::new(db, spec, static_file_provider);
 
         Ok(Self { factory })
     }

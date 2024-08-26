@@ -42,10 +42,11 @@ chrono = { version = "0.4.31", features = ["serde"], default-features = false }
 bigdecimal = { version = "0.4.2", default-features = false }
 
 # reth
-reth-db = { git = "https://github.com/paradigmxyz/reth", package = "reth-db", tag = "v0.2.0-beta.7" }
-reth-primitives = { git = "https://github.com/paradigmxyz/reth", package = "reth-primitives", tag = "v0.2.0-beta.7" }
-reth_provider = { git = "https://github.com/paradigmxyz/reth", package = "reth-provider", tag = "v0.2.0-beta.7" }
-reth-rpc-types = { git = "https://github.com/paradigmxyz/reth", tag = "v0.2.0-beta.7" }
+reth-db = { git = "https://github.com/paradigmxyz/reth", package = "reth-db", tag = "v1.0.5" }
+reth-primitives = { git = "https://github.com/paradigmxyz/reth", package = "reth-primitives", tag = "v1.0.5" }
+reth_provider = { git = "https://github.com/paradigmxyz/reth", package = "reth-provider", tag = "v1.0.5" }
+reth-rpc-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.0.5" }
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.0.5" }
 
 # ethers
 ethers-core = { version = "2.0", default-features = false }
