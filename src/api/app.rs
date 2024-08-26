@@ -30,6 +30,7 @@ pub fn app(jwt_secret: String, state: AppState) -> Router {
 
     let public_routes = Router::new()
         .route("/health", get(health))
+        .route("/is_whitelisted", get(is_whitelisted))
         .route("/auth", post(auth))
         .route("/register", post(register));
 
@@ -46,6 +47,22 @@ async fn health() -> impl IntoResponse {}
 
 pub async fn test() -> impl IntoResponse {
     Json(json!({"foo": "bar"}))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct IsWhitelistedResponse {
+    address: Address,
+}
+
+// GET /api/is_whitelisted
+pub async fn is_whitelisted(
+    State(state): State<AppState>,
+    Json(IsWhitelistedResponse { address }): Json<IsWhitelistedResponse>,
+) -> ApiResult<impl IntoResponse> {
+    let addr = reth_primitives::Address::from_str(&format!("0x{:x}", address)).unwrap();
+
+    let is_whitelisted = state.config.whitelist.is_whitelisted(&addr);
+    Ok(Json(json!({ "result": is_whitelisted })))
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -101,8 +118,6 @@ pub async fn auth(
 
 #[cfg(test)]
 mod test {
-
-    use std::sync::Arc;
 
     use axum::{
         body::Body,
