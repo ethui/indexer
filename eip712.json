@@ -26,7 +26,7 @@
 	"domain": {
 		"name": "ethui-indexer",
 		"version": "1",
-		"chainId": 11155111,
+		"chainId": 1,
 		"verifyingContract": "0x0000000000000000000000000000000000000000"
 	},
 	"primaryType": "IndexerAuth",

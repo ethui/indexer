@@ -51,15 +51,9 @@ impl IndexerAuth {
     }
 
     pub fn check(&self, signature: &Signature) -> Result<()> {
-        dbg!("here");
         self.check_expiration()?;
-        dbg!("here2");
         let hash = self.encode_eip712()?;
-        dbg!(self);
-        dbg!(&hash);
-        dbg!(signature.recover(hash)?);
         signature.verify(hash, self.address)?;
-        dbg!("here3");
 
         Ok(())
     }

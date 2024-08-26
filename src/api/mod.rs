@@ -14,7 +14,7 @@ use self::{app::app, app_state::AppState};
 use crate::{config::Config, db::Db, sync::RethProviderFactory};
 
 #[allow(clippy::async_yields_async)]
-#[instrument(name = "api", skip(db, config), fields(port = config.http.clone().unwrap().port))]
+#[instrument(name = "api", skip(db, config, provider_factory), fields(port = config.http.clone().unwrap().port))]
 pub async fn start(
     db: Db,
     config: Config,

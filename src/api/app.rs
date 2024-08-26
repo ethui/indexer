@@ -1,7 +1,8 @@
 use std::str::FromStr as _;
 
 use axum::{
-    extract::State,
+    extract::{MatchedPath, State},
+    http::Request,
     middleware::from_extractor,
     response::IntoResponse,
     routing::{get, post},
@@ -12,7 +13,8 @@ use ethers_core::types::{Address, Signature};
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tower_http::cors::CorsLayer;
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use tracing::info_span;
 
 use super::{
     app_state::AppState,
@@ -41,6 +43,23 @@ pub fn app(jwt_secret: String, state: AppState) -> Router {
         .layer(Extension(encoding_key))
         .layer(Extension(decoding_key))
         .with_state(state)
+        .layer(
+            TraceLayer::new_for_http().make_span_with(|req: &Request<_>| {
+                // Log the matched route's path (with placeholders not filled in).
+                // Use request.uri() or OriginalUri if you want the real path.
+                let matched_path = req
+                    .extensions()
+                    .get::<MatchedPath>()
+                    .map(MatchedPath::as_str);
+
+                info_span!(
+                    "http_request",
+                    method = ?req.method(),
+                    matched_path,
+                    some_other_field = tracing::field::Empty,
+                )
+            }),
+        )
 }
 
 async fn health() -> impl IntoResponse {}
