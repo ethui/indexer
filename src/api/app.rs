@@ -1,17 +1,20 @@
 use std::str::FromStr as _;
 
 use axum::{
-    extract::State,
+    extract::{MatchedPath, State},
+    http::Request,
     middleware::from_extractor,
     response::IntoResponse,
     routing::{get, post},
     Extension, Json, Router,
 };
+use color_eyre::eyre::eyre;
 use ethers_core::types::{Address, Signature};
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tower_http::cors::CorsLayer;
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use tracing::info_span;
 
 use super::{
     app_state::AppState,
@@ -41,11 +44,28 @@ pub fn app(jwt_secret: String, state: AppState) -> Router {
         .layer(Extension(encoding_key))
         .layer(Extension(decoding_key))
         .with_state(state)
+        .layer(
+            TraceLayer::new_for_http().make_span_with(|req: &Request<_>| {
+                // Log the matched route's path (with placeholders not filled in).
+                // Use request.uri() or OriginalUri if you want the real path.
+                let matched_path = req
+                    .extensions()
+                    .get::<MatchedPath>()
+                    .map(MatchedPath::as_str);
+
+                info_span!(
+                    "http_request",
+                    method = ?req.method(),
+                    matched_path,
+                    some_other_field = tracing::field::Empty,
+                )
+            }),
+        )
 }
 
 async fn health() -> impl IntoResponse {}
 
-pub async fn test() -> impl IntoResponse {
+pub async fn test(State(_state): State<AppState>) -> impl IntoResponse {
     Json(json!({"foo": "bar"}))
 }
 
@@ -87,7 +107,7 @@ pub async fn register(
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuthRequest {
-    signature: Signature,
+    signature: String,
     data: IndexerAuth,
 }
 
@@ -102,8 +122,9 @@ pub async fn auth(
     State(AppState { db, .. }): State<AppState>,
     Json(auth): Json<AuthRequest>,
 ) -> ApiResult<impl IntoResponse> {
+    let sig = Signature::from_str(&auth.signature).map_err(|_| eyre!("Invalid signature"))?;
     auth.data
-        .check(&auth.signature)
+        .check(&sig)
         .map_err(|_| ApiError::InvalidCredentials)?;
 
     if !db.is_registered(auth.data.address.into()).await? {
@@ -142,7 +163,6 @@ mod test {
         },
         config::Config,
         db::Db,
-        sync::RethProviderFactory,
     };
 
     fn get(uri: &str) -> Request<Body> {
@@ -225,7 +245,7 @@ mod test {
         let auth = post(
             "/api/auth",
             AuthRequest {
-                signature: sign_typed_data(&data).await?,
+                signature: sign_typed_data(&data).await?.to_string(),
                 data,
             },
         );
@@ -255,14 +275,14 @@ mod test {
         let req = post(
             "/api/auth",
             AuthRequest {
-                signature: sign_typed_data(&data).await?,
+                signature: sign_typed_data(&data).await?.to_string(),
                 data: data.clone(),
             },
         );
         let req2 = post(
             "/api/auth",
             AuthRequest {
-                signature: sign_typed_data(&data).await?,
+                signature: sign_typed_data(&data).await?.to_string(),
                 data,
             },
         );
@@ -286,7 +306,7 @@ mod test {
         let req = post(
             "/api/auth",
             AuthRequest {
-                signature: sign_typed_data(&data).await?,
+                signature: sign_typed_data(&data).await?.to_string(),
                 data,
             },
         );
@@ -308,7 +328,7 @@ mod test {
         let req = post(
             "/api/auth",
             AuthRequest {
-                signature: sign_typed_data(&invalid_data).await?,
+                signature: sign_typed_data(&invalid_data).await?.to_string(),
                 data,
             },
         );
@@ -349,7 +369,7 @@ mod test {
         let req = post(
             "/api/auth",
             AuthRequest {
-                signature: sign_typed_data(&data).await?,
+                signature: sign_typed_data(&data).await?.to_string(),
                 data,
             },
         );

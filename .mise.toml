@@ -2,6 +2,9 @@
 alias = "r"
 run = "cargo run -- --config ethui-indexer.toml"
 
+[tasks.sign]
+run = "cast wallet sign --private-key $PRIVATE_KEY --data --from-file eip712.json"
+
 [tasks.test]
 alias = "t"
 run = "cargo test"
