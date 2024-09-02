@@ -61,6 +61,7 @@ scalable_cuckoo_filter = "0.2.3"
 rand = { version = "0.8.5", default-features = false, features = ["std_rng"] }
 thiserror = "1.0.61"
 serial_test = "3.1.1"
+url = "2.5.2"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["async_tokio"] }

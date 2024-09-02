@@ -26,6 +26,11 @@ pub fn address() -> Address {
     Address::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap()
 }
 
+#[rstest::fixture]
+pub fn wrong_address() -> Address {
+    Address::from_str("0x123fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap()
+}
+
 pub async fn to_json_resp<T: DeserializeOwned>(resp: Response<Body>) -> color_eyre::Result<T> {
     let bytes = to_bytes(resp.into_body(), usize::MAX).await?;
     Ok(serde_json::from_str(std::str::from_utf8(&bytes)?)?)
