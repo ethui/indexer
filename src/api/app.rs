@@ -33,6 +33,7 @@ pub fn app(jwt_secret: String, state: AppState) -> Router {
 
     let public_routes = Router::new()
         .route("/health", get(health))
+        .route("/is_whitelisted", get(is_whitelisted))
         .route("/auth", post(auth))
         .route("/register", post(register));
 
@@ -66,6 +67,22 @@ async fn health() -> impl IntoResponse {}
 
 pub async fn test(State(_state): State<AppState>) -> impl IntoResponse {
     Json(json!({"foo": "bar"}))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct IsWhitelistedResponse {
+    address: Address,
+}
+
+// GET /api/is_whitelisted
+pub async fn is_whitelisted(
+    State(state): State<AppState>,
+    Json(IsWhitelistedResponse { address }): Json<IsWhitelistedResponse>,
+) -> ApiResult<impl IntoResponse> {
+    let addr = reth_primitives::Address::from_str(&format!("0x{:x}", address)).unwrap();
+
+    let is_whitelisted = state.config.whitelist.is_whitelisted(&addr);
+    Ok(Json(json!({ "result": is_whitelisted })))
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -142,7 +159,7 @@ mod test {
             app_state::AppState,
             auth::IndexerAuth,
             registration::RegistrationProof,
-            test_utils::{address, now, sign_typed_data, to_json_resp},
+            test_utils::{address, now, sign_typed_data, to_json_resp, wrong_address},
         },
         config::Config,
         db::Db,
@@ -154,6 +171,20 @@ mod test {
             .method("GET")
             .header("content-type", "application/json")
             .body(Body::empty())
+            .unwrap()
+    }
+
+    fn get_with_query<T: Serialize>(uri: &str, query: T) -> Request<Body> {
+        // let mut url = Url::parse(uri).expect("Invalid URI");
+        // let query = serde_json::to_string(&query).expect("failed to serialize query");
+        // url.set_query(Some(&query));
+        let json = serde_json::to_string(&query).expect("Failed to serialize JSON");
+
+        Request::builder()
+            .uri(uri)
+            .method("GET")
+            .header("content-type", "application/json")
+            .body(Body::from(json))
             .unwrap()
     }
 
@@ -374,6 +405,40 @@ mod test {
         let req = get("/api/health");
         let resp = app.oneshot(req).await?;
         assert_eq!(resp.status(), StatusCode::OK);
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    #[serial]
+    async fn test_is_whitelisted_endpoint(address: Address) -> Result<()> {
+        let app = build_app().await;
+
+        let req = get_with_query(
+            "/api/is_whitelisted",
+            super::IsWhitelistedResponse { address },
+        );
+        let resp: serde_json::Value = to_json_resp(app.oneshot(req).await?).await?;
+        assert_eq!(resp["result"].as_bool(), Some(true));
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    #[serial]
+    async fn test_is_whitelisted_endpoint_wrong_address(wrong_address: Address) -> Result<()> {
+        let app = build_app().await;
+
+        let req = get_with_query(
+            "/api/is_whitelisted",
+            super::IsWhitelistedResponse {
+                address: wrong_address,
+            },
+        );
+        let resp: serde_json::Value = to_json_resp(app.oneshot(req).await?).await?;
+        assert_eq!(resp["result"].as_bool(), Some(false));
+
         Ok(())
     }
 }
