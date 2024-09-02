@@ -23,16 +23,16 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # web
-axum = "0.7.2"
+axum = { version = "0.7.2", features = ["tracing"] }
 tower = "0.4.13"
-tower-http = { version = "0.5.0", features = ["cors"] }
+tower-http = { version = "0.5.0", features = ["cors", "trace"] }
 jsonwebtoken = "9.2.0"
 serde_json = "1.0.108"
 axum-extra = { version = "0.9.0", features = ["typed-header"] }
 
 # db
-diesel = { version = "2.1.0", features = ["postgres", "chrono", "numeric"] }
-diesel-async = { version = "0.4.1", features = [
+diesel = { version = "2.2.3", features = ["postgres", "chrono", "numeric"] }
+diesel-async = { version = "0.5", features = [
   "postgres",
   "deadpool",
   "async-connection-wrapper",
@@ -42,10 +42,11 @@ chrono = { version = "0.4.31", features = ["serde"], default-features = false }
 bigdecimal = { version = "0.4.2", default-features = false }
 
 # reth
-reth-db = { git = "https://github.com/paradigmxyz/reth", package = "reth-db", tag = "v0.2.0-beta.7" }
-reth-primitives = { git = "https://github.com/paradigmxyz/reth", package = "reth-primitives", tag = "v0.2.0-beta.7" }
-reth_provider = { git = "https://github.com/paradigmxyz/reth", package = "reth-provider", tag = "v0.2.0-beta.7" }
-reth-rpc-types = { git = "https://github.com/paradigmxyz/reth", tag = "v0.2.0-beta.7" }
+reth-db = { git = "https://github.com/paradigmxyz/reth", package = "reth-db", tag = "v1.0.5" }
+reth-primitives = { git = "https://github.com/paradigmxyz/reth", package = "reth-primitives", tag = "v1.0.5" }
+reth_provider = { git = "https://github.com/paradigmxyz/reth", package = "reth-provider", tag = "v1.0.5" }
+reth-rpc-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.0.5" }
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.0.5" }
 
 # ethers
 ethers-core = { version = "2.0", default-features = false }

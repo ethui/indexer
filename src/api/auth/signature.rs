@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Eip712, EthAbiType, Serialize, Deserialize)]
 #[eip712(
-    name = "ethui",
+    name = "ethui-indexer",
     version = "1",
     chain_id = 1,
     verifying_contract = "0x0000000000000000000000000000000000000000"
@@ -137,7 +137,7 @@ mod test {
           },
           "primaryType": "IndexerAuth",
           "domain": {
-            "name": "ethui",
+            "name": "ethui-indexer",
             "version": "1",
             "chainId": 1,
             "verifyingContract": "0x0000000000000000000000000000000000000000",
