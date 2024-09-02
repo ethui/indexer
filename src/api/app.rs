@@ -29,6 +29,7 @@ pub fn app(jwt_secret: String, state: AppState) -> Router {
 
     let protected_routes = Router::new()
         .route("/test", post(test))
+        .route("/history", post(history))
         .route_layer(from_extractor::<Claims>());
 
     let public_routes = Router::new()
@@ -67,6 +68,17 @@ async fn health() -> impl IntoResponse {}
 
 pub async fn test(State(_state): State<AppState>) -> impl IntoResponse {
     Json(json!({"foo": "bar"}))
+}
+
+pub async fn history(
+    State(state): State<AppState>,
+    Claims { sub: address, .. }: Claims,
+) -> ApiResult<impl IntoResponse> {
+    let addr = alloy_primitives::Address::from_str(&format!("0x{:x}", address)).unwrap();
+
+    let history = state.db.history(&addr.into()).await?;
+
+    Ok(Json(json!(history)))
 }
 
 #[derive(Debug, Serialize, Deserialize)]

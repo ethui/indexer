@@ -10,6 +10,7 @@ use diesel_async::{
     AsyncConnection, AsyncPgConnection, RunQueryDsl,
 };
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use models::Txs;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::instrument;
 
@@ -195,6 +196,20 @@ impl Db {
             .await?;
 
         Ok(res > 0)
+    }
+
+    pub async fn history(&self, address: &Address) -> Result<Vec<Txs>> {
+        use schema::txs::{self, dsl};
+        let mut conn = self.pool.get().await?;
+
+        Ok(schema::txs::table
+            .filter(dsl::chain_id.eq(self.chain_id))
+            .filter(dsl::address.eq(address))
+            .select((txs::address, txs::hash))
+            .select(Txs::as_select())
+            .order(dsl::block_number.asc())
+            .load(&mut conn)
+            .await?)
     }
 
     pub async fn get_addresses(&self) -> Result<Vec<Address>> {
