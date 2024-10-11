@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use color_eyre::eyre::Result;
 use config::Config;
+use reth_provider::BlockNumReader;
 use tokio::{signal, sync::mpsc};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::info;
@@ -31,6 +32,13 @@ async fn main() -> Result<()> {
     let db = Db::connect(&config, account_tx, job_tx).await?;
     let chain = db.setup_chain(&config.chain).await?;
     let provider_factory = Arc::new(RethProviderFactory::new(&config, &chain)?);
+
+    let provider = provider_factory.get()?;
+    let latest = provider.last_block_number().unwrap();
+    db.update_chain(chain.chain_id as u64, latest).await?;
+
+    let chain = db.setup_chain(&config.chain).await?;
+
     let token = CancellationToken::new();
 
     // setup each task

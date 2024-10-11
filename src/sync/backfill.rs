@@ -30,7 +30,7 @@ pub enum StopStrategy {
 
 impl StopStrategy {
     fn is_on_finish(&self) -> bool {
-        matches!(self, StopStrategy::Token(_))
+        matches!(self, StopStrategy::OnFinish)
     }
 }
 
